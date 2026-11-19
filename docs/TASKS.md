@@ -24,7 +24,7 @@ Style borrowed from RigRoute: one line per task, edit only your own line, done m
 - [x] M-04 · Malek · 147890f · "Exclude downloaded model weights": `alignment.py` (new), `app.py` (+318: pyannote diarization, alignment, bilingual transcript), `templates/script.js`, `templates/index.html` (-1), `.gitignore`, plus `app.py.before_alignment.bak` and `templates/script.js.before_alignment.bak` · CODE · done: 2026-11-18 by Malek
 - [x] M-05 · Zein · 627c0e5 · "Fix diarization, number alignment, and summary crash": `alignment.py`, `app.py`, `requirements.txt`, `templates/index.html`, `templates/script.js`, `tests/test_app.py` (same diff as 6643946). Do not copy the old trailer line · CODE · done: 2026-11-18 by Zein
 - [x] M-06 · Vincent · 77aac93 · "complete frontend UI overhaul, add loading states, logo cleanup, and smart transcript search": `app.py` (10 lines), `static/majlis.logo.jpeg` (binary), `templates/index.html`, `templates/script.js` · CODE · done: 2026-11-19 by Vincent
-- [ ] M-07 · Vincent · 2f88fe6 · "Update index.html": one line in `templates/index.html` · CODE
+- [x] M-07 · Vincent · 2f88fe6 · "Update index.html": one line in `templates/index.html` · CODE · done: 2026-11-19 by Vincent
 - [ ] M-08 · Anthony · 0bb76ca · "git fix": adds the stray file named `e -i 6643946^` (13 lines) · CODE
 - [ ] M-09 · Anthony · 85b4d82 · "Update e -i 6643946^": +3 lines in the same stray file · CODE
 - [ ] M-10 · Anthony · 9faf522 · "fix git 2": same stray file, +1/-4 · CODE
