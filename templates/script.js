@@ -280,7 +280,7 @@ function handleFileSelect(event) {
 
     uploadPrompt.style.display = 'none';
     filePreview.classList.add('flex');
-    btnAnalyze.disabled = false;
+    updateAnalyzeButton();
     updateWaves();
 
     if (animate) gsap.fromTo(filePreview, { autoAlpha: 0, y: 10, scale: 0.97 }, { autoAlpha: 1, y: 0, scale: 1, duration: 0.5, clearProps: 'transform,visibility' });
@@ -291,7 +291,7 @@ function resetUpload() {
     selectedFile = null;
     filePreview.classList.remove('flex');
     uploadPrompt.style.display = '';
-    btnAnalyze.disabled = true;
+    updateAnalyzeButton();
     updateWaves();
 }
 
@@ -302,20 +302,274 @@ function clearFile(event) {
     if (animate) gsap.fromTo(uploadPrompt, { autoAlpha: 0, y: 6 }, { autoAlpha: 1, y: 0, duration: 0.4, clearProps: 'transform,visibility' });
 }
 
-// Speakers stepper. An empty value means auto-detect, which the backend expects.
+// ---------------------------------------------------------------------------
+// Speakers. EAGLE diarization recognises voices it has heard before, so every
+// speaker reads aloud for about 20 seconds. Samples are recorded here, turned
+// into 16 kHz mono WAV in the browser and sent along with the meeting.
+// ---------------------------------------------------------------------------
 const MAX_SPEAKERS = 20;
-function stepSpeakers(delta) {
-    const input = document.getElementById('num_speakers');
-    const current = parseInt(input.value, 10) || 0; // 0 means Auto
-    const next = Math.min(MAX_SPEAKERS, Math.max(0, current + delta));
-    input.value = next === 0 ? '' : String(next);
+const ENROLL_SECONDS = 20;
+const MIN_ENROLL_SECONDS = 5;
+const ENROLL_RATE = 16000;
 
-    const label = document.getElementById('speaker-count');
-    label.textContent = next === 0 ? 'Auto' : String(next);
-    document.getElementById('spk-minus').disabled = next === 0;
-    document.getElementById('spk-plus').disabled = next === MAX_SPEAKERS;
-    if (animate) gsap.fromTo(label, { y: delta > 0 ? 6 : -6, autoAlpha: 0 }, { y: 0, autoAlpha: 1, duration: 0.3, ease: 'power3.out', clearProps: 'transform,visibility' });
+const speakerList = document.getElementById('speaker-list');
+const analyzeHint = document.getElementById('analyze-hint');
+let speakers = [];        // { id, name, sample: Blob|null, url, duration, busy, el }
+let nextSpeakerId = 1;
+let recorder = null;      // { speaker, mediaRecorder, stream, chunks, startedAt, timer }
+const samplePlayer = new Audio();
+let playingSpeaker = null;
+
+function speakerInitial(name) {
+    const first = [...(name || '').trim()][0];
+    return first ? first.toUpperCase() : '?';
 }
+
+function addSpeaker(focus = true) {
+    if (speakers.length >= MAX_SPEAKERS) return;
+    const s = { id: nextSpeakerId++, name: `Speaker ${speakers.length + 1}`, sample: null, url: null, duration: 0, busy: false };
+
+    const block = document.createElement('div');
+    block.className = 'speaker-block';
+    block.innerHTML = `
+        <div class="speaker-row">
+            <div class="avatar" aria-hidden="true"></div>
+            <input class="speaker-name" type="text" maxlength="40" autocomplete="off" aria-label="Speaker name">
+            <span class="sample-status num"></span>
+            <div class="speaker-actions">
+                <button type="button" class="btn btn-secondary btn-record"></button>
+                <button type="button" class="btn icon-btn btn-play" aria-label="Play voice sample"><i data-lucide="play"></i></button>
+                <button type="button" class="btn icon-btn btn-remove" aria-label="Remove speaker"><i data-lucide="trash-2"></i></button>
+            </div>
+        </div>
+        <div class="rec-meter" aria-hidden="true"><span></span></div>`;
+
+    s.el = {
+        block,
+        avatar: block.querySelector('.avatar'),
+        input: block.querySelector('.speaker-name'),
+        status: block.querySelector('.sample-status'),
+        record: block.querySelector('.btn-record'),
+        play: block.querySelector('.btn-play'),
+        remove: block.querySelector('.btn-remove'),
+        meter: block.querySelector('.rec-meter span')
+    };
+    s.el.input.value = s.name;
+    s.el.input.addEventListener('input', () => { s.name = s.el.input.value; refreshSpeakers(); });
+    s.el.record.addEventListener('click', () => toggleRecording(s));
+    s.el.play.addEventListener('click', () => togglePlayback(s));
+    s.el.remove.addEventListener('click', () => removeSpeaker(s));
+
+    speakers.push(s);
+    speakerList.appendChild(block);
+    refreshSpeakers();
+    lucide.createIcons();
+
+    if (animate) gsap.fromTo(block, { autoAlpha: 0, y: -6 }, { autoAlpha: 1, y: 0, duration: 0.35, clearProps: 'transform,visibility' });
+    if (focus) s.el.input.select();
+}
+
+function removeSpeaker(s) {
+    if (recorder && recorder.speaker === s) cancelRecording();
+    if (playingSpeaker === s) stopPlayback();
+    if (s.url) URL.revokeObjectURL(s.url);
+    speakers = speakers.filter(x => x !== s);
+    s.el.block.remove();
+    refreshSpeakers();
+}
+
+function speakerProblems() {
+    const names = speakers.map(s => s.name.trim());
+    const missing = speakers.filter(s => !s.sample).map(s => s.name.trim() || 'every speaker');
+    if (!speakers.length) return 'Add at least one speaker.';
+    if (names.some(n => !n)) return 'Give every speaker a name.';
+    if (new Set(names.map(n => n.toLowerCase())).size !== names.length) return 'Two speakers have the same name.';
+    if (recorder || speakers.some(s => s.busy)) return 'Finish the recording first.';
+    if (missing.length) return `Record a voice sample for ${missing.slice(0, 2).join(' and ')}${missing.length > 2 ? ` and ${missing.length - 2} more` : ''}.`;
+    return '';
+}
+
+function updateAnalyzeButton() {
+    const problem = !selectedFile ? 'Choose the meeting recording.' : speakerProblems();
+    btnAnalyze.disabled = Boolean(problem);
+    analyzeHint.textContent = problem;
+}
+
+// Redraw every speaker row from its state.
+function refreshSpeakers() {
+    const names = speakers.map(s => s.name.trim().toLowerCase());
+    speakers.forEach((s, i) => {
+        const isRecording = recorder && recorder.speaker === s;
+        const otherBusy = (recorder && !isRecording) || s.busy;
+        const { avatar, input, status, record, play, remove, block } = s.el;
+
+        avatar.style.background = speakerColors[i % speakerColors.length];
+        avatar.textContent = speakerInitial(s.name);
+        input.setAttribute('aria-invalid', String(!s.name.trim() || names.indexOf(s.name.trim().toLowerCase()) !== i));
+
+        block.classList.toggle('is-recording', Boolean(isRecording));
+        status.className = 'sample-status num' + (isRecording ? ' is-recording' : s.sample ? ' is-ready' : '');
+        if (s.busy) status.textContent = 'Processing…';
+        else if (isRecording) status.textContent = `${formatTime(recorderElapsed())} / ${formatTime(ENROLL_SECONDS)}`;
+        else status.textContent = s.sample ? `${formatTime(s.duration)} recorded` : 'No voice sample';
+
+        record.disabled = Boolean(otherBusy);
+        record.classList.toggle('is-recording', Boolean(isRecording));
+        record.innerHTML = isRecording ? '<span class="rec-dot"></span>Stop'
+            : `<i data-lucide="mic"></i>${s.sample ? 'Re-record' : 'Record'}`;
+        record.setAttribute('aria-label', isRecording ? `Stop recording ${s.name}` : `Record a voice sample for ${s.name || 'this speaker'}`);
+
+        play.hidden = !s.sample || isRecording;
+        play.innerHTML = `<i data-lucide="${playingSpeaker === s ? 'square' : 'play'}"></i>`;
+        remove.disabled = Boolean(isRecording || s.busy);
+    });
+    document.getElementById('add-speaker').disabled = speakers.length >= MAX_SPEAKERS;
+    lucide.createIcons();
+    updateAnalyzeButton();
+}
+
+function recorderElapsed() {
+    return recorder ? (performance.now() - recorder.startedAt) / 1000 : 0;
+}
+
+async function toggleRecording(s) {
+    if (recorder) {
+        if (recorder.speaker === s) stopRecording();
+        return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+        showToast('This browser cannot record audio. Try a current Chrome, Edge, Firefox or Safari.', true);
+        return;
+    }
+    stopPlayback();
+
+    let stream;
+    try {
+        // Keep the voice as natural as possible: the meeting recording will not be noise-suppressed either.
+        stream = await navigator.mediaDevices.getUserMedia({
+            audio: { channelCount: 1, echoCancellation: false, noiseSuppression: false, autoGainControl: true }
+        });
+    } catch (err) {
+        showToast(err && err.name === 'NotAllowedError'
+            ? 'Microphone access is blocked. Allow it from the address bar and try again.'
+            : 'No microphone was found.', true);
+        return;
+    }
+
+    const mediaRecorder = new MediaRecorder(stream);
+    const chunks = [];
+    mediaRecorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+    const rec = { speaker: s, mediaRecorder, stream, chunks, startedAt: performance.now(), timer: null, cancelled: false };
+    recorder = rec;
+    mediaRecorder.onstop = () => finishRecording(rec);
+    mediaRecorder.start(250);
+
+    recorder.timer = setInterval(() => {
+        const elapsed = recorderElapsed();
+        s.el.meter.style.width = `${Math.min(100, (elapsed / ENROLL_SECONDS) * 100)}%`;
+        s.el.status.textContent = `${formatTime(elapsed)} / ${formatTime(ENROLL_SECONDS)}`;
+        if (elapsed >= ENROLL_SECONDS) stopRecording();
+    }, 200);
+    s.el.meter.style.width = '0%';
+    refreshSpeakers();
+}
+
+function stopRecording() {
+    if (!recorder || recorder.mediaRecorder.state === 'inactive') return;
+    recorder.duration = recorderElapsed();
+    clearInterval(recorder.timer);
+    recorder.mediaRecorder.stop(); // finishRecording runs from onstop
+}
+
+function cancelRecording() {
+    if (!recorder) return;
+    recorder.cancelled = true;
+    stopRecording();
+}
+
+async function finishRecording(rec) {
+    if (!rec) return;
+    rec.stream.getTracks().forEach(t => t.stop());
+    recorder = null;
+    const s = rec.speaker;
+
+    if (rec.cancelled) { refreshSpeakers(); return; }
+    if (rec.duration < MIN_ENROLL_SECONDS) {
+        refreshSpeakers();
+        showToast(`Keep reading for at least ${MIN_ENROLL_SECONDS} seconds; 20 is best.`, true);
+        return;
+    }
+
+    s.busy = true;
+    refreshSpeakers();
+    try {
+        const wav = await toWav16k(new Blob(rec.chunks, { type: rec.mediaRecorder.mimeType || 'audio/webm' }));
+        if (!speakers.includes(s)) return; // removed while processing
+        // Check the audio that was actually captured, not the clock.
+        if (wav.duration < MIN_ENROLL_SECONDS) {
+            showToast(`Only ${wav.duration.toFixed(1)} s of audio was captured. Please record again; 20 seconds is best.`, true);
+            return;
+        }
+        if (s.url) URL.revokeObjectURL(s.url);
+        s.sample = wav.blob;
+        s.duration = wav.duration;
+        s.url = URL.createObjectURL(wav.blob);
+    } catch (err) {
+        console.error(err);
+        showToast('Could not process the recording. Please record again.', true);
+    } finally {
+        s.busy = false;
+        refreshSpeakers();
+    }
+}
+
+// Decode whatever the browser recorded (WebM/Opus, MP4/AAC…) and resample to 16 kHz mono WAV.
+async function toWav16k(blob) {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    const ctx = new Ctx();
+    let decoded;
+    try { decoded = await ctx.decodeAudioData(await blob.arrayBuffer()); } finally { ctx.close(); }
+
+    const offline = new OfflineAudioContext(1, Math.max(1, Math.ceil(decoded.duration * ENROLL_RATE)), ENROLL_RATE);
+    const source = offline.createBufferSource();
+    source.buffer = decoded;
+    source.connect(offline.destination); // channels are mixed down to mono
+    source.start();
+    const rendered = await offline.startRendering();
+    return { blob: encodeWav(rendered.getChannelData(0), ENROLL_RATE), duration: rendered.duration };
+}
+
+function encodeWav(samples, rate) {
+    const view = new DataView(new ArrayBuffer(44 + samples.length * 2));
+    const text = (offset, str) => { for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i)); };
+    text(0, 'RIFF'); view.setUint32(4, 36 + samples.length * 2, true); text(8, 'WAVE');
+    text(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+    view.setUint32(24, rate, true); view.setUint32(28, rate * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+    text(36, 'data'); view.setUint32(40, samples.length * 2, true);
+    for (let i = 0; i < samples.length; i++) {
+        const v = Math.max(-1, Math.min(1, samples[i]));
+        view.setInt16(44 + i * 2, v < 0 ? v * 0x8000 : v * 0x7fff, true);
+    }
+    return new Blob([view], { type: 'audio/wav' });
+}
+
+function togglePlayback(s) {
+    if (playingSpeaker === s) { stopPlayback(); return; }
+    stopPlayback();
+    if (!s.url) return;
+    playingSpeaker = s;
+    samplePlayer.src = s.url;
+    samplePlayer.play().catch(() => stopPlayback());
+    refreshSpeakers();
+}
+
+function stopPlayback() {
+    if (!playingSpeaker) return;
+    samplePlayer.pause();
+    playingSpeaker = null;
+    refreshSpeakers();
+}
+samplePlayer.addEventListener('ended', stopPlayback);
 
 // ---------------------------------------------------------------------------
 // Analysis. The request keeps running while the user moves between pages.
@@ -335,7 +589,7 @@ function setStep(id, state) {
 let statusInterval;
 
 function startProgress(fileName) {
-    const statuses = ['Aligning audio…', 'Transcribing speech…', 'Separating speakers…', 'Writing the summary…', 'Finishing the report…'];
+    const statuses = ['Aligning audio…', 'Transcribing speech…', 'Matching voices to speakers…', 'Writing the summary…', 'Finishing the report…'];
     let i = 0;
     const statusEl = document.getElementById('loading-status');
     statusEl.textContent = statuses[0];
@@ -380,6 +634,7 @@ function buildReport(data, fileName) {
         lines,
         duration: ends.length ? Math.max(...ends) : 0,
         speakers: new Set(lines.map(l => l.speaker).filter(s => s && s !== 'UNKNOWN')).size,
+        speakerNames: Array.isArray(data.speakers) ? data.speakers : [],
         alignmentError: Boolean(data.alignment_error)
     };
 }
@@ -390,6 +645,9 @@ async function analyze() {
         showToast('Choose an audio file first.', true);
         return;
     }
+    const problem = speakerProblems();
+    if (problem) { showToast(problem, true); return; }
+    stopPlayback();
 
     const file = selectedFile;
     job = { fileName: file.name };
@@ -399,7 +657,10 @@ async function analyze() {
 
     const formData = new FormData();
     formData.append('audio', file);
-    formData.append('num_speakers', document.getElementById('num_speakers').value);
+    speakers.forEach(s => {
+        formData.append('speaker_name', s.name.trim());
+        formData.append('speaker_sample', s.sample, `speaker-${s.id}.wav`);
+    });
 
     try {
         const res = await fetch('/analyze', { method: 'POST', body: formData });
@@ -442,14 +703,18 @@ async function analyze() {
 // ---------------------------------------------------------------------------
 const speakerColors = ['#0a7c76', '#5856d6', '#c2185b', '#b25000', '#0062cc', '#6e4fa3'];
 
-function formatSpeakerName(rawName) {
-    if (!rawName || rawName === 'UNKNOWN') return { name: 'Unknown Speaker', index: 0 };
+// names: the enrolled speaker names, in the order they were added (EAGLE reports).
+function formatSpeakerName(rawName, names = []) {
+    if (!rawName || rawName === 'UNKNOWN') return { name: 'Unknown Speaker', index: 0, initial: '?' };
+    const enrolled = names.indexOf(rawName);
+    if (enrolled !== -1) return { name: rawName, index: enrolled, initial: speakerInitial(rawName) };
+    // Older reports from pyannote use SPEAKER_00, SPEAKER_01…
     const match = rawName.match(/SPEAKER_(\d+)/i);
     if (match) {
         const num = parseInt(match[1], 10);
-        return { name: `Speaker ${num + 1}`, index: num };
+        return { name: `Speaker ${num + 1}`, index: num, initial: String(num + 1) };
     }
-    return { name: rawName, index: 0 };
+    return { name: rawName, index: 0, initial: speakerInitial(rawName) };
 }
 
 function escapeHtml(str) {
@@ -488,7 +753,7 @@ function renderReport(report) {
     document.getElementById('no-matches').style.display = 'none';
 
     report.lines.forEach(line => {
-        const speaker = formatSpeakerName(line.speaker);
+        const speaker = formatSpeakerName(line.speaker, report.speakerNames);
         const color = speakerColors[speaker.index % speakerColors.length];
 
         const card = document.createElement('div');
@@ -497,7 +762,7 @@ function renderReport(report) {
         const avatar = document.createElement('div');
         avatar.className = 'avatar';
         avatar.style.background = color;
-        avatar.textContent = speaker.name === 'Unknown Speaker' ? '?' : String(speaker.index + 1);
+        avatar.textContent = speaker.initial;
 
         const body = document.createElement('div');
         body.className = 'transcript-body';
@@ -548,7 +813,7 @@ function exportReport() {
         'TRANSCRIPT',
         ...r.lines.map(l => {
             const time = Number.isFinite(Number(l.start)) ? `[${formatTime(l.start)}] ` : '';
-            return `${time}${formatSpeakerName(l.speaker).name}: ${l.text}`;
+            return `${time}${formatSpeakerName(l.speaker, r.speakerNames).name}: ${l.text}`;
         })
     ].join('\n');
     const url = URL.createObjectURL(new Blob(['﻿' + out], { type: 'text/plain;charset=utf-8' }));
@@ -642,13 +907,16 @@ function setToast(visible) {
 if (hasGsap) gsap.set('#toast', { xPercent: -50, x: 0, y: 0, yPercent: -160 });
 
 // Leaving the page would cancel a running analysis, so warn first.
+// Recorded voice samples are lost on reload too.
 window.addEventListener('beforeunload', (e) => {
-    if (job) { e.preventDefault(); e.returnValue = ''; }
+    if (job || recorder || speakers.some(s => s.sample)) { e.preventDefault(); e.returnValue = ''; }
 });
 
 // ---------------------------------------------------------------------------
 // First paint: one orchestrated entrance
 // ---------------------------------------------------------------------------
+addSpeaker(false);
+addSpeaker(false);
 renderDashboard();
 window.addEventListener('load', () => {
     moveNavIndicator(document.getElementById('nav-dashboard'), true);

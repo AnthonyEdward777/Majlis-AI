@@ -11,7 +11,6 @@ sys.modules["torch"] = MagicMock()
 sys.modules["transformers"] = MagicMock()
 sys.modules["transformers.audio_utils"] = MagicMock()
 sys.modules["transformers.models.cohere_asr"] = MagicMock()
-sys.modules["pyannote.audio"] = MagicMock()
 sys.modules["torchaudio.pipelines"] = MagicMock()
 
 app = importlib.import_module("app")
@@ -59,7 +58,11 @@ class AnalyzeRouteTests(unittest.TestCase):
         with patch.object(app, "transcribe_audio", side_effect=fake_transcribe):
             response = client.post(
                 "/analyze",
-                data={"audio": (io.BytesIO(b"fake audio"), "../../evil.wav")},
+                data={
+                    "audio": (io.BytesIO(b"fake audio"), "../../evil.wav"),
+                    "speaker_name": "Anthony",
+                    "speaker_sample": (io.BytesIO(b"voice"), "speaker-1.wav"),
+                },
             )
 
         self.assertEqual(response.status_code, 500)
@@ -71,31 +74,62 @@ class AnalyzeRouteTests(unittest.TestCase):
         response = app.app.test_client().post("/analyze", data={})
         self.assertEqual(response.status_code, 400)
 
-    def test_invalid_speaker_count_returns_400(self):
-        for value in ("0", "abc", "-2", "21"):
+    def test_missing_voice_samples_returns_400(self):
+        response = app.app.test_client().post(
+            "/analyze",
+            data={"audio": (io.BytesIO(b"fake audio"), "a.wav")},
+        )
+        self.assertEqual(response.status_code, 400)
+
+    def test_invalid_enrollment_returns_400(self):
+        cases = {
+            "blank name": [("", "x.wav")],
+            "duplicate names": [("Zein", "x.wav"), ("zein", "y.wav")],
+            "name without sample": [("Malek", None)],
+        }
+        for label, speakers in cases.items():
+            data = {"audio": (io.BytesIO(b"fake audio"), "a.wav"), "speaker_name": [], "speaker_sample": []}
+            for name, sample in speakers:
+                data["speaker_name"].append(name)
+                if sample:
+                    data["speaker_sample"].append((io.BytesIO(b"voice"), sample))
+            response = app.app.test_client().post("/analyze", data=data)
+            self.assertEqual(response.status_code, 400, label)
+
+    def test_enrolled_voices_are_passed_to_diarization_and_removed(self):
+        seen = {}
+
+        def fake_diarize(path, enrollment_paths):
+            seen.update(enrollment_paths)
+            for sample_path in enrollment_paths.values():
+                self.assertTrue(sample_path.exists())
+                self.assertEqual(sample_path.parent, app.UPLOAD_DIR)
+            raise RuntimeError("stop here")
+
+        with (
+            patch.object(app, "transcribe_audio", return_value="x"),
+            patch.object(app, "diarize_audio", side_effect=fake_diarize),
+        ):
             response = app.app.test_client().post(
                 "/analyze",
                 data={
                     "audio": (io.BytesIO(b"fake audio"), "a.wav"),
-                    "num_speakers": value,
-                },
-            )
-            self.assertEqual(response.status_code, 400, value)
-
-    def test_speaker_count_is_passed_to_diarization(self):
-        with (
-            patch.object(app, "transcribe_audio", return_value="x"),
-            patch.object(app, "diarize_audio", side_effect=RuntimeError) as diarize,
-        ):
-            app.app.test_client().post(
-                "/analyze",
-                data={
-                    "audio": (io.BytesIO(b"fake audio"), "a.wav"),
-                    "num_speakers": "2",
+                    "speaker_name": ["Anthony", "Vincent"],
+                    "speaker_sample": [
+                        (io.BytesIO(b"voice 1"), "speaker-1.wav"),
+                        (io.BytesIO(b"voice 2"), "speaker-2.wav"),
+                    ],
                 },
             )
 
-        self.assertEqual(diarize.call_args.args[1], 2)
+        self.assertEqual(response.status_code, 500)
+        self.assertEqual(list(seen), ["Anthony", "Vincent"])
+        self.assertFalse(any(p.exists() for p in seen.values()))
+
+    def test_short_voice_sample_is_rejected(self):
+        with patch.object(app, "load_audio", return_value=[0.0] * 16000):
+            with self.assertRaises(ValueError):
+                app.diarize_audio("meeting.wav", {"Zein": "zein.wav"})
 
 
 class SpellOutNumbersTests(unittest.TestCase):
