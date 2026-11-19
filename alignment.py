@@ -48,6 +48,32 @@ def spell_out_numbers(text):
     return re.sub(r"\d+", to_words, text)
 
 
+# The model's convolution front end allocates memory in proportion to the audio
+# length, so long meetings are processed in windows. Both are multiples of the
+# model's 320-sample frame stride, so window frames line up with whole-file frames.
+WINDOW_SAMPLES = 30 * SAMPLE_RATE
+CONTEXT_SAMPLES = 1 * SAMPLE_RATE  # extra audio on each side, discarded after inference
+FRAME_STRIDE = 320
+
+
+def compute_emissions(model, waveform, device):
+    """Run the model over the audio in windows and join the per-frame emissions."""
+    total = waveform.shape[1]
+    if total <= WINDOW_SAMPLES + 2 * CONTEXT_SAMPLES:
+        return model(waveform.to(device))[0]
+
+    parts = []
+    for start in range(0, total, WINDOW_SAMPLES):
+        lo = max(0, start - CONTEXT_SAMPLES)
+        hi = min(total, start + WINDOW_SAMPLES + CONTEXT_SAMPLES)
+        emission = model(waveform[:, lo:hi].to(device))[0]
+        first = (start - lo) // FRAME_STRIDE
+        is_last = start + WINDOW_SAMPLES >= total
+        last = None if is_last else first + WINDOW_SAMPLES // FRAME_STRIDE
+        parts.append(emission[:, first:last])
+    return torch.cat(parts, dim=1)
+
+
 def align_transcript_words(audio_path, transcript):
     """
     Estimate start/end timestamps for transcript words.
@@ -114,7 +140,7 @@ def align_transcript_words(audio_path, transcript):
 
     # Generate acoustic emissions and align the known transcript.
     with torch.inference_mode():
-        emissions, _ = model(waveform.to(device))
+        emissions = compute_emissions(model, waveform, device)
         token_spans = aligner(
             emissions[0],
             tokenizer(normalized_words)
