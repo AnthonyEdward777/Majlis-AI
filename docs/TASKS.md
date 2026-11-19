@@ -55,3 +55,7 @@ Only the team adds tasks here. Add lines in this format, with the next free ID:
 - **Claim before coding:** set your line to `in-progress`, your name and branch `yourname/T-XXX-short-name`, then `git pull --rebase origin main` and `git push origin main` **before** you start. A claim only counts once pushed.
 - Work on your branch. To finish: `git switch main`, `git pull --rebase origin main`, merge your branch with `--no-ff`, run `pytest tests/`, tick the box (`[x]`, date, name), push. Never leave `main` red.
 - Found extra work? Add a new line with the next free ID, status `todo`, no owner. Don't silently do it.
+
+### Tasks
+
+- [ ] T-001 · Replace pyannote with EAGLE-Diar (enrolled speakers, voice samples recorded in the browser) · status: in-progress · owner: Anthony · branch: anthony/T-001-eagle-diarization · deps: —
