@@ -2,350 +2,557 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Majlis | Enterprise Meeting Intelligence</title>
-    
-    <!-- Premium Typography -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="color-scheme" content="light dark">
+    <title>Majlis</title>
+
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        majlisNavy: '#0a192f',
-                        majlisNavyLight: '#112240',
-                        majlisTeal: '#20b2aa',
-                        majlisTealLight: '#e6f7f6',
-                        majlisSand: '#e3c28c'
-                    },
-                    fontFamily: {
-                        sans: ['Inter', 'system-ui', 'sans-serif'],
-                        arabic: ['Cairo', 'sans-serif']
-                    },
-                    animation: {
-                        'fade-in': 'fadeIn 0.4s ease-out forwards',
-                        'slide-up': 'slideUp 0.5s ease-out forwards',
-                        'pulse-subtle': 'pulseSubtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-                    },
-                    keyframes: {
-                        fadeIn: {
-                            '0%': { opacity: '0' },
-                            '10%': { opacity: '1' },
-                        },
-                        slideUp: {
-                            '0%': { opacity: '0', transform: 'translateY(15px)' },
-                            '100%': { opacity: '1', transform: 'translateY(0)' },
-                        },
-                        pulseSubtle: {
-                            '0%, 100%': { opacity: '1' },
-                            '50%': { opacity: '0.7' },
-                        }
-                    }
-                }
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+
+    <style>
+        /* ---------- Tokens ---------- */
+        :root {
+            --wall: #e9ecf0;
+            --surface: rgba(255, 255, 255, 0.86);
+            --surface-solid: #ffffff;
+            --surface-2: #f3f4f6;
+            --ink: #1d1d1f;
+            --ink-2: #6e6e73;
+            --ink-3: #767679;
+            --hairline: rgba(0, 0, 0, 0.09);
+            --fill: rgba(118, 118, 128, 0.12);
+            --fill-strong: rgba(118, 118, 128, 0.2);
+            --accent: #0a7c76;
+            --accent-hover: #087069;
+            --accent-tint: rgba(10, 124, 118, 0.12);
+            --accent-ink: #0a7c76;
+            --glow: rgba(32, 178, 170, 0.45);
+            --sand: #e3c28c;
+            --danger: #d70015;
+            --glass: rgba(255, 255, 255, 0.5);
+            --glass-edge: rgba(255, 255, 255, 0.7);
+            --glass-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.08), 0 20px 50px -20px rgba(16, 24, 40, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+            --bar: rgba(233, 236, 240, 0.7);
+            --shadow-group: 0 0 0 0.5px var(--hairline), 0 1px 2px rgba(0, 0, 0, 0.04);
+            --shadow-float: 0 0 0 0.5px rgba(0, 0, 0, 0.06), 0 10px 30px -8px rgba(0, 0, 0, 0.22);
+            --radius: 14px;
+            --radius-inner: 10px;
+            --ease: cubic-bezier(0.2, 0, 0, 1);
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --wall: #0c0d10;
+                --surface: rgba(30, 30, 33, 0.82);
+                --surface-solid: #1c1c1e;
+                --surface-2: #2a2a2d;
+                --ink: #f5f5f7;
+                --ink-2: #a1a1a6;
+                --ink-3: #a1a1a6;
+                --hairline: rgba(255, 255, 255, 0.12);
+                --fill: rgba(118, 118, 128, 0.24);
+                --fill-strong: rgba(118, 118, 128, 0.36);
+                --accent: #12827a;
+                --accent-hover: #0e736c;
+                --accent-tint: rgba(47, 184, 174, 0.18);
+                --accent-ink: #4fd1c6;
+                --glow: rgba(47, 184, 174, 0.5);
+                --danger: #ff6961;
+                --glass: rgba(40, 40, 44, 0.45);
+                --glass-edge: rgba(255, 255, 255, 0.12);
+                --glass-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.1), 0 24px 60px -20px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+                --bar: rgba(12, 13, 16, 0.7);
+                --shadow-group: 0 0 0 0.5px var(--hairline);
+                --shadow-float: 0 0 0 0.5px rgba(255, 255, 255, 0.1), 0 12px 32px -8px rgba(0, 0, 0, 0.7);
             }
         }
-    </script>
 
-    <!-- Lucide Icons for Premium Minimalist Icons -->
-    <script src="https://unpkg.com/lucide@latest"></script>
-    
-    <style>
-        /* Custom Scrollbar for a polished feel */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        /* ---------- Base ---------- */
+        *, *::before, *::after { box-sizing: border-box; }
+        html, body { height: 100%; margin: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif; /* SF on Apple devices, Inter elsewhere */
+            font-size: 15px; line-height: 1.47; letter-spacing: -0.009em;
+            color: var(--ink); background: var(--wall);
+            -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+            overflow: hidden;
+        }
+        /* Soft wallpaper so the glass sidebar has something to refract. */
+        body::before {
+            content: ""; position: fixed; inset: -10%; z-index: -1; pointer-events: none;
+            background:
+                radial-gradient(40% 45% at 8% 12%, rgba(32, 178, 170, 0.28), transparent 70%),
+                radial-gradient(35% 40% at 92% 88%, rgba(227, 194, 140, 0.35), transparent 70%),
+                radial-gradient(30% 35% at 70% 8%, rgba(99, 132, 255, 0.12), transparent 70%);
+            filter: blur(20px);
+        }
+        h1, h2, h3 { margin: 0; text-wrap: balance; }
+        p { margin: 0; text-wrap: pretty; }
+        button, input, select { font: inherit; color: inherit; }
+        button { cursor: pointer; border: 0; background: none; padding: 0; }
+        ::selection { background: var(--accent-tint); color: var(--ink); }
+        :focus-visible { outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px; }
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-thumb { background: var(--fill-strong); border-radius: 10px; border: 3px solid transparent; background-clip: padding-box; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-        
-        /* Smooth View Transitions */
+        .num { font-variant-numeric: tabular-nums; }
+        .arabic { font-family: 'Cairo', 'Inter', sans-serif; }
+        svg.lucide { stroke-width: 1.75; flex-shrink: 0; }
+
+        /* ---------- Shell ---------- */
+        .app { display: grid; grid-template-columns: 264px 1fr; height: 100vh; }
+        .sidebar {
+            position: relative; z-index: 20; display: flex; flex-direction: column;
+            margin: 10px 0 10px 10px; padding: 16px 12px 12px; border-radius: 20px;
+            background: var(--glass); box-shadow: var(--glass-shadow);
+            -webkit-backdrop-filter: blur(40px) saturate(190%); backdrop-filter: blur(40px) saturate(190%);
+        }
+        .brand { display: flex; align-items: center; gap: 10px; padding: 4px 10px 20px; }
+        .brand img { width: 30px; height: 30px; border-radius: 8px; object-fit: cover; outline: 1px solid rgba(0,0,0,0.1); outline-offset: -1px; background: #fff; }
+        .brand span { font-size: 16px; font-weight: 600; letter-spacing: -0.02em; }
+        .nav { position: relative; display: flex; flex-direction: column; gap: 2px; }
+        .nav-group-label { font-size: 12px; font-weight: 600; color: var(--ink-2); padding: 18px 10px 6px; }
+        .nav-btn {
+            position: relative; z-index: 1; display: flex; align-items: center; gap: 10px;
+            height: 36px; padding: 0 10px; border-radius: 10px; font-size: 14px; font-weight: 500; color: var(--ink);
+            transition: background-color 150ms var(--ease), color 150ms var(--ease);
+        }
+        .nav-btn svg { width: 18px; height: 18px; color: var(--ink-2); transition: color 150ms var(--ease); }
+        .nav-btn:hover { background: rgba(255, 255, 255, 0.35); }
+        .nav-btn.is-active, .nav-btn.is-active:hover { background: transparent; color: var(--accent-ink); }
+        .nav-btn.is-active svg { color: var(--accent-ink); }
+        .nav-status { margin-left: auto; display: none; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--accent-ink); }
+        .nav-status svg { width: 14px; height: 14px; color: var(--accent-ink); }
+        .nav-btn.is-busy .nav-status, .nav-btn.has-news .nav-status { display: inline-flex; }
+        .nav-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-tint); }
+        #nav-indicator {
+            position: absolute; left: 0; right: 0; top: 0; height: 36px; border-radius: 10px; pointer-events: none; opacity: 0;
+            background: var(--surface-solid); box-shadow: 0 0 0 0.5px var(--hairline), 0 2px 8px -2px rgba(0, 0, 0, 0.12);
+        }
+        .sidebar-foot { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 10px; }
+        .avatar { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 600; color: #fff; flex-shrink: 0; font-family: 'Inter', sans-serif; }
+        .sidebar-foot .avatar { background: linear-gradient(180deg, #ecd4a6, #d6ae6c); color: #3d2c0f; }
+        .sidebar-foot p { font-size: 13px; font-weight: 500; line-height: 1.3; }
+        .sidebar-foot small { display: block; font-size: 12px; color: var(--ink-2); }
+
+        .main { position: relative; overflow-y: auto; overflow-x: hidden; }
+        .toolbar {
+            position: sticky; top: 0; z-index: 10; height: 52px; display: flex; align-items: center; padding: 0 32px;
+            background: transparent; border-bottom: 0.5px solid transparent;
+            transition: background-color 200ms var(--ease), border-color 200ms var(--ease);
+        }
+        .toolbar.is-scrolled { background: var(--bar); border-bottom-color: var(--hairline); -webkit-backdrop-filter: blur(24px) saturate(180%); backdrop-filter: blur(24px) saturate(180%); }
+        #page-title { font-size: 15px; font-weight: 600; letter-spacing: -0.015em; opacity: 0; transform: translateY(4px); transition: opacity 200ms var(--ease), transform 250ms var(--ease); }
+        .toolbar.is-scrolled #page-title { opacity: 1; transform: none; }
+
+        .page { max-width: 960px; margin: 0 auto; padding: 0 40px 64px; }
         .view-section { display: none; }
-        .view-section.active { display: block; animation: fadeIn 0.3s ease-out; }
+        .view-section.active { display: block; }
+        .large-title { font-size: 34px; line-height: 1.12; font-weight: 700; letter-spacing: -0.026em; }
+        .page-sub { color: var(--ink-2); margin-top: 6px; font-size: 15px; max-width: 60ch; }
+        .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 28px; }
+        .head-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .section-head { display: flex; align-items: baseline; justify-content: space-between; margin: 36px 0 12px; }
+        .section-title { font-size: 20px; font-weight: 600; letter-spacing: -0.018em; }
+
+        /* ---------- Buttons ---------- */
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+            height: 34px; padding: 0 16px; border-radius: 999px; font-size: 14px; font-weight: 500; white-space: nowrap;
+            transition: background-color 150ms var(--ease), color 150ms var(--ease), box-shadow 250ms var(--ease), transform 200ms var(--ease), opacity 150ms;
+        }
+        .btn svg { width: 16px; height: 16px; }
+        .btn:active { transform: scale(0.96); }
+        .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.12), inset 0 0.5px 0 rgba(255,255,255,0.25); }
+        /* Glow on hover: a soft teal halo, not just a press effect. */
+        .btn-primary:hover { background: var(--accent-hover); transform: translateY(-1px); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 16%, transparent), 0 8px 26px -4px var(--glow), inset 0 0.5px 0 rgba(255,255,255,0.25); }
+        .btn-primary:active { transform: scale(0.96); }
+        .btn-secondary { background: var(--surface-solid); color: var(--ink); box-shadow: 0 0 0 0.5px var(--hairline), 0 1px 2px rgba(0,0,0,0.06); }
+        .btn-secondary:hover { box-shadow: 0 0 0 0.5px var(--hairline), 0 0 0 4px var(--accent-tint), 0 6px 18px -6px var(--glow); color: var(--accent-ink); }
+        .btn-quiet { color: var(--accent-ink); height: 28px; padding: 0 10px; font-size: 13px; }
+        .btn-quiet:hover { background: var(--accent-tint); }
+        .btn-lg { height: 44px; padding: 0 26px; font-size: 15px; font-weight: 600; }
+        .btn:disabled, .btn:disabled:hover { opacity: 0.4; cursor: not-allowed; box-shadow: none; transform: none; background: var(--accent); }
+        .icon-btn { width: 32px; height: 32px; padding: 0; border-radius: 50%; color: var(--ink-2); }
+        .icon-btn:hover { background: var(--fill); color: var(--ink); }
+        .icon-btn svg { width: 18px; height: 18px; }
+
+        /* ---------- Groups (inset lists) ---------- */
+        .group { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow-group); overflow: hidden;
+                 -webkit-backdrop-filter: blur(20px) saturate(160%); backdrop-filter: blur(20px) saturate(160%); }
+        .group + .group { margin-top: 20px; }
+        .group-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; padding: 10px 14px 10px 20px; border-bottom: 0.5px solid var(--hairline); }
+        .group-head h3 { font-size: 15px; font-weight: 600; letter-spacing: -0.012em; }
+        .row { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 52px; padding: 10px 14px 10px 20px; }
+        .row + .row { border-top: 0.5px solid var(--hairline); }
+        .row-label { font-weight: 500; }
+        .row-value { color: var(--ink-2); text-align: right; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .footnote { font-size: 13px; color: var(--ink-2); padding: 8px 20px 0; max-width: 70ch; }
+
+        /* Meeting rows (dashboard + history) */
+        .meeting { width: 100%; text-align: left; display: flex; align-items: center; gap: 14px; min-height: 62px; padding: 10px 16px 10px 18px; transition: background-color 150ms var(--ease); }
+        .meeting + .meeting { border-top: 0.5px solid var(--hairline); }
+        .meeting:hover { background: var(--accent-tint); }
+        .meeting-icon { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--accent-tint); color: var(--accent-ink); flex-shrink: 0; }
+        .meeting-icon svg { width: 18px; height: 18px; }
+        .meeting-main { min-width: 0; flex: 1; }
+        .meeting-name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .meeting-meta { font-size: 13px; color: var(--ink-2); }
+        .meeting > svg { width: 16px; height: 16px; color: var(--ink-3); }
+
+        .stats { display: grid; grid-template-columns: repeat(3, 1fr); }
+        .stat { padding: 18px 20px 20px; }
+        .stat + .stat { border-left: 0.5px solid var(--hairline); }
+        .stat-label { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: var(--ink-2); }
+        .stat-label svg { width: 15px; height: 15px; }
+        .stat-value { font-size: 30px; font-weight: 600; letter-spacing: -0.03em; margin-top: 6px; }
+
+        .empty { text-align: center; padding: 48px 24px 52px; display: flex; flex-direction: column; align-items: center; }
+        .empty-icon { color: var(--ink-3); margin-bottom: 14px; }
+        .empty-icon svg { width: 40px; height: 40px; stroke-width: 1.25; }
+        .empty h3 { font-size: 17px; font-weight: 600; letter-spacing: -0.015em; }
+        .empty p { color: var(--ink-2); max-width: 400px; margin-top: 6px; }
+        .empty .btn { margin-top: 20px; }
+
+        /* ---------- Upload ---------- */
+        #drop-zone {
+            position: relative; margin: 16px; border-radius: var(--radius-inner);
+            border: 1.5px dashed var(--fill-strong); background: var(--surface-2);
+            padding: 34px 24px 30px; text-align: center;
+            transition: border-color 200ms var(--ease), background-color 200ms var(--ease), box-shadow 250ms var(--ease);
+        }
+        #drop-zone:hover, #drop-zone.is-dragging { border-color: var(--accent); background: var(--accent-tint); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 10%, transparent); }
+        #audio { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; z-index: 2; }
+        #drop-zone:has(#audio:focus-visible) { outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px; }
+        #upload-prompt { pointer-events: none; display: flex; flex-direction: column; align-items: center; }
+        #upload-prompt h3 { font-size: 17px; font-weight: 600; letter-spacing: -0.015em; margin-top: 18px; }
+        #upload-prompt p { color: var(--ink-2); font-size: 14px; margin-top: 4px; }
+        #upload-prompt .choose { color: var(--accent-ink); font-weight: 500; }
+
+        .waveform { display: flex; align-items: center; justify-content: center; gap: 3px; height: 44px; }
+        .waveform span { display: block; width: 3px; height: 100%; border-radius: 3px; background: var(--accent); transform: scaleY(0.2); }
+        .waveform-lg { height: 76px; gap: 4px; }
+        .waveform-lg span { width: 4px; }
+
+        #file-preview { display: none; position: relative; z-index: 3; align-items: center; gap: 14px; max-width: 460px; margin: 0 auto; padding: 12px 10px 12px 12px; border-radius: 12px; background: var(--surface-solid); box-shadow: var(--shadow-float); text-align: left; }
+        #file-preview.flex { display: flex; }
+        .file-tile { width: 40px; height: 40px; border-radius: 10px; display: grid; place-items: center; background: var(--accent-tint); color: var(--accent-ink); flex-shrink: 0; }
+        .file-tile svg { width: 20px; height: 20px; }
+        .file-info { min-width: 0; flex: 1; }
+        #file-name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #file-size { font-size: 13px; color: var(--ink-2); }
+
+        .stepper { display: inline-flex; align-items: center; background: var(--fill); border-radius: 9px; padding: 2px; flex-shrink: 0; }
+        .stepper button { width: 36px; height: 30px; border-radius: 7px; display: grid; place-items: center; color: var(--ink); transition: background-color 150ms var(--ease), box-shadow 150ms var(--ease), transform 150ms var(--ease); }
+        .stepper button:hover:not(:disabled) { background: var(--surface-solid); box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+        .stepper button:active:not(:disabled) { transform: scale(0.92); }
+        .stepper button:disabled { opacity: 0.35; cursor: default; }
+        .stepper button svg { width: 16px; height: 16px; }
+        #speaker-count { min-width: 56px; text-align: center; font-weight: 600; font-size: 14px; display: inline-block; }
+        .actions-end { display: flex; justify-content: flex-end; margin-top: 24px; }
+
+        /* ---------- Loading ---------- */
+        .loading-wrap { max-width: 520px; margin: 24px auto 0; text-align: center; }
+        .loading-wrap h2 { font-size: 28px; font-weight: 700; letter-spacing: -0.024em; margin-top: 28px; }
+        #loading-file { color: var(--ink-2); margin-top: 4px; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #loading-status { color: var(--ink-2); margin-top: 2px; min-height: 22px; }
+        .steps { margin-top: 28px; text-align: left; }
+        .step { display: flex; align-items: center; gap: 12px; min-height: 50px; padding: 10px 20px; color: var(--ink-3); transition: color 300ms var(--ease); }
+        .step + .step { border-top: 0.5px solid var(--hairline); }
+        .step-icon { width: 22px; height: 22px; display: grid; place-items: center; }
+        .step-icon svg { width: 20px; height: 20px; }
+        .step.is-done { color: var(--ink); }
+        .step.is-done .step-icon, .step.is-active .step-icon { color: var(--accent-ink); }
+        .step.is-active { color: var(--ink); font-weight: 500; }
+        .loading-note { font-size: 13px; color: var(--ink-2); margin-top: 16px; }
+        .spin { animation: spin 0.9s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ---------- Results ---------- */
+        #summary { padding: 22px 24px 8px; font-size: 17px; line-height: 1.9; }
+        #summary p { margin-bottom: 14px; }
+        .search { position: relative; width: 240px; max-width: 100%; }
+        .search svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 15px; height: 15px; color: var(--ink-3); pointer-events: none; }
+        .search input { width: 100%; height: 32px; border: 0; border-radius: 9px; background: var(--fill); padding: 0 12px 0 32px; font-size: 14px; transition: box-shadow 150ms var(--ease), background-color 150ms var(--ease); }
+        .search input::placeholder { color: var(--ink-3); }
+        .search input:focus { outline: none; background: var(--surface-solid); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent); }
+        #transcript { max-height: 620px; overflow-y: auto; padding: 6px 0; }
+        .transcript-card { display: flex; gap: 14px; padding: 12px 20px; transition: background-color 150ms var(--ease); }
+        .transcript-card:hover { background: var(--surface-2); }
+        .transcript-body { min-width: 0; flex: 1; }
+        .transcript-meta { display: flex; align-items: baseline; gap: 10px; }
+        .speaker-badge { font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600; }
+        .transcript-time { font-family: 'Inter', sans-serif; font-size: 12px; color: var(--ink-3); }
+        .transcript-text { font-size: 17px; line-height: 1.8; margin-top: 2px; }
+        mark { background: color-mix(in srgb, var(--sand) 60%, transparent); color: inherit; border-radius: 3px; padding: 0 2px; }
+        .no-matches { padding: 28px; text-align: center; color: var(--ink-2); display: none; }
+
+        /* ---------- Toast (HUD) ---------- */
+        #toast {
+            position: fixed; top: 16px; left: 50%; z-index: 50; transform: translate(-50%, -160%);
+            display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 14px; min-height: 44px; border-radius: 999px;
+            background: var(--glass); box-shadow: var(--glass-shadow);
+            -webkit-backdrop-filter: blur(30px) saturate(190%); backdrop-filter: blur(30px) saturate(190%);
+            font-size: 14px; font-weight: 500; max-width: calc(100vw - 32px);
+        }
+        #toast > svg { width: 18px; height: 18px; }
+        #toast .ok { color: var(--accent-ink); }
+        #toast .err { color: var(--danger); }
+        #toast-msg { padding-right: 8px; }
+        #toast-action { display: none; height: 28px; font-size: 13px; }
+        #toast.has-action #toast-action { display: inline-flex; }
+
+        /* ---------- Small screens: sidebar becomes a floating glass tab bar ---------- */
+        @media (max-width: 760px) {
+            .app { grid-template-columns: 1fr; }
+            .sidebar {
+                position: fixed; left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); margin: 0;
+                flex-direction: row; padding: 6px; border-radius: 26px;
+            }
+            .brand, .sidebar-foot, .nav-group-label, #nav-indicator, .nav-status { display: none !important; }
+            .nav { flex-direction: row; width: 100%; justify-content: space-around; }
+            .nav-btn { flex-direction: column; gap: 2px; height: 52px; padding: 0 4px; font-size: 11px; flex: 1; justify-content: center; border-radius: 20px; }
+            .nav-btn.is-active { background: var(--accent-tint); }
+            .nav-btn.is-busy svg, .nav-btn.has-news svg { color: var(--accent-ink); }
+            .nav-btn svg { width: 22px; height: 22px; }
+            .main { padding-bottom: 96px; }
+            .toolbar { padding: 0 16px; }
+            .page { padding: 0 16px 40px; }
+            .large-title { font-size: 28px; }
+            .stats { grid-template-columns: 1fr; }
+            .stat + .stat { border-left: 0; border-top: 0.5px solid var(--hairline); }
+            .search { width: 100%; }
+            .group-head { flex-wrap: wrap; }
+            #toast { top: 10px; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+        }
     </style>
 </head>
-<body class="bg-slate-50 font-sans text-slate-800 antialiased h-screen flex overflow-hidden selection:bg-majlisTeal selection:text-white">
+<body>
+<div class="app">
 
-    <!-- Sidebar Navigation -->
-    <aside class="w-64 bg-majlisNavy text-slate-300 flex flex-col transition-all duration-300 z-20 flex-shrink-0 shadow-2xl relative">
-        <div class="py-6 flex items-center justify-center border-b border-white/10">
-            <img src="/static/majlis.logo.jpeg" alt="Majlis" class="w-40 h-auto object-contain rounded-xl bg-white p-3 shadow-md">
+    <aside class="sidebar">
+        <div class="brand">
+            <img src="/static/majlis.logo.jpeg" alt="">
+            <span>Majlis</span>
         </div>
 
-        <nav class="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
-            <button onclick="switchView('dashboard')" id="nav-dashboard" class="nav-btn w-full flex items-center px-3 py-2.5 text-sm font-medium rounded-lg hover:bg-white/5 hover:text-white transition-colors text-white bg-white/10">
-                <i data-lucide="layout-dashboard" class="w-5 h-5 mr-3"></i> Dashboard
+        <nav id="side-nav" class="nav" aria-label="Main">
+            <span id="nav-indicator" aria-hidden="true"></span>
+            <button onclick="switchView('dashboard')" id="nav-dashboard" class="nav-btn is-active">
+                <i data-lucide="layout-grid"></i><span>Dashboard</span>
             </button>
-            <button onclick="switchView('analyze')" id="nav-analyze" class="nav-btn w-full flex items-center px-3 py-2.5 text-sm font-medium rounded-lg hover:bg-white/5 hover:text-white transition-colors">
-                <i data-lucide="mic" class="w-5 h-5 mr-3"></i> Analyze Meeting
+            <button onclick="switchView('analyze')" id="nav-analyze" class="nav-btn">
+                <i data-lucide="audio-lines"></i><span>New Analysis</span>
+                <span class="nav-status" id="nav-analyze-status"></span>
             </button>
-            <button onclick="switchView('history')" id="nav-history" class="nav-btn w-full flex items-center px-3 py-2.5 text-sm font-medium rounded-lg hover:bg-white/5 hover:text-white transition-colors">
-                <i data-lucide="clock" class="w-5 h-5 mr-3"></i> Meeting History
+            <button onclick="switchView('history')" id="nav-history" class="nav-btn">
+                <i data-lucide="clock-3"></i><span>History</span>
             </button>
-            
-            <div class="pt-6 mt-6 border-t border-white/10">
-                <button onclick="switchView('settings')" id="nav-settings" class="nav-btn w-full flex items-center px-3 py-2.5 text-sm font-medium rounded-lg hover:bg-white/5 hover:text-white transition-colors">
-                    <i data-lucide="settings" class="w-5 h-5 mr-3"></i> Settings
-                </button>
-            </div>
+            <p class="nav-group-label">Workspace</p>
+            <button onclick="switchView('settings')" id="nav-settings" class="nav-btn">
+                <i data-lucide="settings-2"></i><span>Settings</span>
+            </button>
         </nav>
 
-        <div class="p-4 border-t border-white/10">
-            <div class="flex items-center px-3 py-2">
-                <div class="h-8 w-8 rounded-full bg-majlisTeal flex items-center justify-center text-white font-bold text-sm">Z</div>
-                <div class="ml-3">
-                    <p class="text-sm font-medium text-white">Enterprise User</p>
-                    <p class="text-xs text-slate-400">WAPCO Egyptlol</p>
-                </div>
+        <div class="sidebar-foot">
+            <div class="avatar">M</div>
+            <div>
+                <p>Workspace</p>
+                <small>Local session</small>
             </div>
         </div>
     </aside>
 
-    <!-- Main Content Area -->
-    <div class="flex-1 flex flex-col h-screen overflow-hidden bg-slate-50 relative">
-        
-        <!-- Top Header -->
-        <header class="h-20 bg-white border-b border-slate-200 flex items-center justify-between px-8 flex-shrink-0 z-10">
-            <h1 id="page-title" class="text-2xl font-semibold text-slate-800">Dashboard</h1>
-            <div class="flex items-center space-x-4">
-                <button class="p-2 text-slate-400 hover:text-majlisTeal transition-colors rounded-full hover:bg-slate-100">
-                    <i data-lucide="bell" class="w-5 h-5"></i>
-                </button>
-                <button onclick="switchView('analyze')" class="bg-majlisNavy text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-majlisTeal hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200 flex items-center">
-                    <i data-lucide="plus" class="w-4 h-4 mr-2"></i> New Analysis
-                </button>
-            </div>
+    <div class="main" id="main">
+        <header class="toolbar" id="toolbar">
+            <h1 id="page-title">Dashboard</h1>
         </header>
 
-        <!-- Scrollable Views Container -->
-        <main class="flex-1 overflow-y-auto p-8 relative">
-            
-            <!-- VIEW: DASHBOARD -->
-            <section id="view-dashboard" class="view-section active max-w-6xl mx-auto space-y-8 animate-fade-in">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center">
-                        <div class="p-4 bg-majlisTealLight text-majlisTeal rounded-xl mr-4">
-                            <i data-lucide="bar-chart-2" class="w-6 h-6"></i>
-                        </div>
-                        <div>
-                            <p class="text-sm font-medium text-slate-500">Meetings Analyzed</p>
-                            <p class="text-2xl font-bold text-majlisNavy">0</p>
-                        </div>
-                    </div>
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center">
-                        <div class="p-4 bg-blue-50 text-blue-600 rounded-xl mr-4">
-                            <i data-lucide="clock" class="w-6 h-6"></i>
-                        </div>
-                        <div>
-                            <p class="text-sm font-medium text-slate-500">Hours Processed</p>
-                            <p class="text-2xl font-bold text-majlisNavy">0.0h</p>
-                        </div>
-                    </div>
-                    <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center">
-                        <div class="p-4 bg-purple-50 text-purple-600 rounded-xl mr-4">
-                            <i data-lucide="users" class="w-6 h-6"></i>
-                        </div>
-                        <div>
-                            <p class="text-sm font-medium text-slate-500">Unique Speakers</p>
-                            <p class="text-2xl font-bold text-majlisNavy">0</p>
-                        </div>
-                    </div>
-                </div>
+        <div class="page">
 
-                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-12 text-center flex flex-col items-center justify-center">
-                    <div class="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
-                        <i data-lucide="inbox" class="w-8 h-8 text-slate-400"></i>
-                    </div>
-                    <h3 class="text-lg font-semibold text-slate-800">No meetings analyzed yet</h3>
-                    <p class="text-slate-500 mt-2 max-w-md">Upload an audio recording of your first meeting to extract speakers, transcripts, and AI-generated executive summaries.</p>
-                    <button onclick="switchView('analyze')" class="mt-6 text-majlisTeal font-medium hover:text-majlisNavy transition-colors flex items-center">
-                        Start your first analysis <i data-lucide="arrow-right" class="w-4 h-4 ml-1"></i>
-                    </button>
-                </div>
-            </section>
-
-            <!-- VIEW: ANALYZE MEETING -->
-            <section id="view-analyze" class="view-section max-w-4xl mx-auto space-y-6">
-                <!-- Configuration Card -->
-                <div class="bg-white p-8 rounded-2xl shadow-sm border border-slate-100">
-                    <h2 class="text-xl font-semibold text-majlisNavy mb-6">Upload Recording</h2>
-                    
-                    <!-- Interactive Drag & Drop Zone -->
-                    <div id="drop-zone" class="border-2 border-dashed border-slate-300 rounded-xl p-10 text-center hover:bg-slate-50 hover:border-majlisTeal transition-all duration-200 relative group mb-8">
-                        <input type="file" id="audio" accept=".wav,.mp3" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10" onchange="handleFileSelect(event)">
-                        
-                        <div id="upload-prompt" class="flex flex-col items-center pointer-events-none">
-                            <div class="w-14 h-14 bg-slate-50 rounded-full flex items-center justify-center group-hover:bg-majlisTealLight transition-colors mb-4 shadow-sm">
-                                <i data-lucide="upload-cloud" class="w-7 h-7 text-slate-500 group-hover:text-majlisTeal transition-colors"></i>
-                            </div>
-                            <h3 class="text-lg font-medium text-slate-800">Click or drag audio file here</h3>
-                            <p class="text-sm text-slate-500 mt-1">Supports .WAV and .MP3 format</p>
-                        </div>
-
-                        <!-- Selected File Preview -->
-                        <div id="file-preview" class="hidden flex items-center justify-between bg-white border border-slate-200 p-4 rounded-lg shadow-sm w-full max-w-md mx-auto relative z-20">
-                            <div class="flex items-center space-x-3 overflow-hidden">
-                                <i data-lucide="file-audio" class="w-6 h-6 text-majlisTeal flex-shrink-0"></i>
-                                <div class="text-left truncate">
-                                    <p id="file-name" class="text-sm font-medium text-slate-800 truncate"></p>
-                                    <p id="file-size" class="text-xs text-slate-500"></p>
-                                </div>
-                            </div>
-                            <button onclick="clearFile(event)" class="text-slate-400 hover:text-red-500 p-1 transition-colors">
-                                <i data-lucide="x" class="w-4 h-4"></i>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Options -->
-                    <div class="max-w-md">
-                        <label for="num_speakers" class="block text-sm font-medium text-slate-700 mb-2">Number of Speakers <span class="text-slate-400 font-normal">(Optional)</span></label>
-                        <div class="relative">
-                            <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <i data-lucide="users" class="w-4 h-4 text-slate-400"></i>
-                            </div>
-                            <input type="number" id="num_speakers" min="1" max="20" placeholder="Leave blank to auto-detect" 
-                                class="block w-full pl-10 border border-slate-200 p-3 rounded-xl focus:ring-2 focus:ring-majlisTeal focus:border-transparent outline-none transition-all bg-slate-50 focus:bg-white text-sm">
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Action Bar -->
-                <div class="flex justify-end">
-                    <button id="btn-analyze" onclick="analyze()" disabled
-                        class="bg-majlisNavy text-white font-medium px-8 py-3.5 rounded-xl shadow-md hover:bg-majlisTeal hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:transform-none flex items-center">
-                        Begin Analysis <i data-lucide="arrow-right" class="w-4 h-4 ml-2"></i>
-                    </button>
-                </div>
-            </section>
-
-            <!-- VIEW: LOADING STATE -->
-            <section id="view-loading" class="view-section max-w-2xl mx-auto mt-20">
-                <div class="bg-white p-10 rounded-2xl shadow-xl border border-slate-100 text-center animate-slide-up">
-                    <div class="relative w-24 h-24 mx-auto mb-6">
-                        <svg class="animate-spin w-full h-full text-slate-100" viewBox="0 0 24 24" fill="none">
-                            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
-                        </svg>
-                        <svg class="animate-spin w-full h-full text-majlisTeal absolute top-0 left-0" viewBox="0 0 24 24" fill="none">
-                            <path stroke="currentColor" stroke-width="3" stroke-linecap="round" d="M4 12a8 8 0 018-8"></path>
-                        </svg>
-                        <i data-lucide="cpu" class="w-8 h-8 text-majlisNavy absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 animate-pulse-subtle"></i>
-                    </div>
-                    <h2 class="text-xl font-bold text-majlisNavy mb-2">Analyzing Meeting</h2>
-                    <p id="loading-status" class="text-slate-500 font-medium">Extracting audio features...</p>
-                    
-                    <div class="mt-8 space-y-3 text-left">
-                        <div class="flex items-center text-sm text-majlisTeal">
-                            <i data-lucide="check-circle-2" class="w-4 h-4 mr-2"></i> Audio securely uploaded
-                        </div>
-                        <div id="step-transcribe" class="flex items-center text-sm text-slate-400 transition-colors duration-500">
-                            <i data-lucide="loader-2" class="w-4 h-4 mr-2 animate-spin"></i> Running Pyannote Diarization & Cohere Transcription
-                        </div>
-                        <div id="step-summary" class="flex items-center text-sm text-slate-400 opacity-50 transition-all duration-500">
-                            <i data-lucide="circle" class="w-4 h-4 mr-2"></i> Generating Executive Summary
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- VIEW: RESULTS -->
-            <section id="view-results" class="view-section max-w-5xl mx-auto space-y-8 pb-12">
-                
-                <div class="flex items-center justify-between mb-8 animate-fade-in">
+            <!-- DASHBOARD -->
+            <section id="view-dashboard" class="view-section active">
+                <div class="page-head">
                     <div>
-                        <h2 class="text-2xl font-bold text-majlisNavy">Intelligence Report</h2>
-                        <p class="text-slate-500 text-sm mt-1">Analysis complete. Review transcripts and insights below.</p>
-                    </div>
-                    <div class="flex space-x-3">
-                        <button class="px-4 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg text-sm font-medium hover:bg-slate-50 transition-colors flex items-center">
-                            <i data-lucide="download" class="w-4 h-4 mr-2"></i> Export
-                        </button>
+                        <h2 class="large-title">Dashboard</h2>
+                        <p class="page-sub">Your analyzed meetings at a glance.</p>
                     </div>
                 </div>
 
-                <!-- Executive Summary -->
-                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden animate-slide-up" style="animation-delay: 0.1s;">
-                    <div class="bg-slate-50/50 border-b border-slate-100 px-6 py-4 flex items-center justify-between">
-                        <div class="flex items-center space-x-2">
-                            <div class="bg-majlisTeal/10 p-1.5 rounded-lg text-majlisTeal">
-                                <i data-lucide="sparkles" class="w-4 h-4"></i>
+                <div class="group stats">
+                    <div class="stat">
+                        <p class="stat-label"><i data-lucide="file-audio-2"></i>Meetings analyzed</p>
+                        <p class="stat-value num" id="stat-meetings">0</p>
+                    </div>
+                    <div class="stat">
+                        <p class="stat-label"><i data-lucide="timer"></i>Hours processed</p>
+                        <p class="stat-value num" id="stat-hours">0.0h</p>
+                    </div>
+                    <div class="stat">
+                        <p class="stat-label"><i data-lucide="users-round"></i>Speakers detected</p>
+                        <p class="stat-value num" id="stat-speakers">0</p>
+                    </div>
+                </div>
+
+                <div class="section-head">
+                    <h3 class="section-title">Recent meetings</h3>
+                    <button class="btn btn-quiet" id="see-all" onclick="switchView('history')" hidden>See all</button>
+                </div>
+                <div class="group" id="recent-list"></div>
+            </section>
+
+            <!-- NEW ANALYSIS -->
+            <section id="view-analyze" class="view-section">
+                <div class="page-head">
+                    <div>
+                        <h2 class="large-title">New Analysis</h2>
+                        <p class="page-sub">Upload a recording. Majlis transcribes it, separates the speakers and writes a summary. You can keep using the app while it works.</p>
+                    </div>
+                </div>
+
+                <div class="group">
+                    <div id="drop-zone">
+                        <input type="file" id="audio" accept=".wav,.mp3" aria-label="Choose an audio file" onchange="handleFileSelect(event)">
+                        <div id="upload-prompt">
+                            <div class="waveform" id="idle-wave" aria-hidden="true"></div>
+                            <h3>Drop an audio file here</h3>
+                            <p>or <span class="choose">choose a file</span>, WAV or MP3</p>
+                        </div>
+                        <div id="file-preview">
+                            <div class="file-tile"><i data-lucide="file-audio-2"></i></div>
+                            <div class="file-info">
+                                <p id="file-name"></p>
+                                <p id="file-size" class="num"></p>
                             </div>
-                            <h3 class="text-base font-semibold text-majlisNavy">Executive Summary</h3>
+                            <button onclick="clearFile(event)" class="btn icon-btn" aria-label="Remove file"><i data-lucide="x"></i></button>
                         </div>
-                        <button onclick="copyText('summary')" class="text-slate-400 hover:text-majlisTeal transition-colors p-1" title="Copy Summary">
-                            <i data-lucide="copy" class="w-4 h-4"></i>
-                        </button>
-                    </div>
-                    <div class="p-8">
-                        <div id="summary" class="prose prose-slate max-w-none font-arabic text-slate-700 leading-loose text-lg" dir="rtl"></div>
                     </div>
                 </div>
 
-                <!-- Interactive Transcript -->
-                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden animate-slide-up" style="animation-delay: 0.2s;">
-                    <div class="bg-slate-50/50 border-b border-slate-100 px-6 py-4 flex items-center justify-between">
-                        <div class="flex items-center space-x-2">
-                            <div class="bg-blue-50 p-1.5 rounded-lg text-blue-600">
-                                <i data-lucide="message-square" class="w-4 h-4"></i>
-                            </div>
-                            <h3 class="text-base font-semibold text-majlisNavy">Interactive Transcript</h3>
+                <div class="group">
+                    <div class="row">
+                        <p class="row-label" id="speakers-label">Number of speakers</p>
+                        <div class="stepper" role="group" aria-labelledby="speakers-label">
+                            <button type="button" id="spk-minus" onclick="stepSpeakers(-1)" aria-label="Fewer speakers" disabled><i data-lucide="minus"></i></button>
+                            <span id="speaker-count" class="num" aria-live="polite">Auto</span>
+                            <button type="button" id="spk-plus" onclick="stepSpeakers(1)" aria-label="More speakers"><i data-lucide="plus"></i></button>
                         </div>
-                        <div class="relative w-64">
-                            <i data-lucide="search" class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 transform -translate-y-1/2"></i>
-                            <input type="text" id="transcript-search" oninput="filterTranscript()" placeholder="Search transcript..." class="w-full pl-9 pr-4 py-1.5 text-sm bg-white border border-slate-200 rounded-md focus:outline-none focus:border-majlisTeal focus:ring-1 focus:ring-majlisTeal">
-                        </div>
+                        <input type="hidden" id="num_speakers" value="">
                     </div>
-                    <div class="p-6 bg-slate-50/30">
-                        <div id="transcript" class="space-y-4 max-h-[600px] overflow-y-auto pr-4 font-arabic text-lg" dir="rtl">
-                            <!-- Transcripts injected via JS -->
-                        </div>
-                    </div>
+                </div>
+                <p class="footnote">Leave on Auto to detect the number of speakers. Set it when two voices sound alike, such as on a phone call.</p>
+
+                <div class="actions-end">
+                    <button id="btn-analyze" onclick="analyze()" disabled class="btn btn-primary btn-lg">Begin Analysis</button>
                 </div>
             </section>
 
-            <!-- VIEW: HISTORY -->
-            <section id="view-history" class="view-section max-w-5xl mx-auto">
-                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 p-12 text-center flex flex-col items-center justify-center">
-                    <div class="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mb-4">
-                        <i data-lucide="history" class="w-8 h-8 text-slate-400"></i>
+            <!-- ANALYZING (shown under New Analysis while a job runs) -->
+            <section id="view-loading" class="view-section">
+                <div class="loading-wrap">
+                    <div class="waveform waveform-lg" id="busy-wave" aria-hidden="true"></div>
+                    <h2>Analyzing meeting</h2>
+                    <p id="loading-file"></p>
+                    <p id="loading-status" aria-live="polite">Preparing audio…</p>
+                    <div class="group steps">
+                        <div class="step is-done" id="step-upload">
+                            <span class="step-icon"><i data-lucide="check-circle-2"></i></span>Audio uploaded
+                        </div>
+                        <div class="step" id="step-transcribe">
+                            <span class="step-icon"><i data-lucide="circle"></i></span>Transcribing and identifying speakers
+                        </div>
+                        <div class="step" id="step-summary">
+                            <span class="step-icon"><i data-lucide="circle"></i></span>Writing the executive summary
+                        </div>
                     </div>
-                    <h3 class="text-lg font-semibold text-slate-800">History module in development</h3>
-                    <p class="text-slate-500 mt-2 max-w-md">Once connected to the backend database, your past meeting analyses will appear here in a searchable table.</p>
+                    <p class="loading-note">This keeps running if you switch pages. You'll get a notification when the report is ready.</p>
                 </div>
             </section>
 
-            <!-- VIEW: SETTINGS -->
-            <section id="view-settings" class="view-section max-w-3xl mx-auto">
-                <div class="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-                    <div class="border-b border-slate-100 px-6 py-5">
-                        <h3 class="text-lg font-semibold text-slate-800">Preferences</h3>
+            <!-- REPORT -->
+            <section id="view-results" class="view-section">
+                <div class="page-head">
+                    <div>
+                        <h2 class="large-title">Meeting Report</h2>
+                        <p class="page-sub" id="report-meta"></p>
                     </div>
-                    <div class="p-6 space-y-6 opacity-75 pointer-events-none">
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Default Language</label>
-                            <select class="w-full border border-slate-200 rounded-lg p-2.5 bg-slate-50 text-sm">
-                                <option>Egyptian Arabic (ar-EG)</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Cohere Model Path</label>
-                            <input type="text" value="CohereLabs/cohere-transcribe-arabic-07-2026" class="w-full border border-slate-200 rounded-lg p-2.5 bg-slate-50 text-sm font-mono text-slate-500" disabled>
+                    <div class="head-actions">
+                        <button onclick="copyText('summary')" class="btn btn-secondary"><i data-lucide="copy"></i>Copy summary</button>
+                        <button onclick="exportReport()" class="btn btn-secondary"><i data-lucide="download"></i>Export</button>
+                    </div>
+                </div>
+
+                <div class="group">
+                    <div class="group-head"><h3>Executive summary</h3></div>
+                    <div id="summary" class="arabic" dir="rtl"></div>
+                </div>
+
+                <div class="group">
+                    <div class="group-head">
+                        <h3>Transcript</h3>
+                        <div class="search">
+                            <i data-lucide="search"></i>
+                            <input type="search" id="transcript-search" oninput="filterTranscript()" placeholder="Search" aria-label="Search transcript">
                         </div>
                     </div>
+                    <div id="transcript" class="arabic" dir="rtl"></div>
+                    <p class="no-matches" id="no-matches">No lines match your search.</p>
                 </div>
             </section>
 
-        </main>
+            <!-- HISTORY -->
+            <section id="view-history" class="view-section">
+                <div class="page-head">
+                    <div>
+                        <h2 class="large-title">History</h2>
+                        <p class="page-sub">Reports are saved in this browser only.</p>
+                    </div>
+                    <div class="head-actions">
+                        <button class="btn btn-secondary" id="clear-history" onclick="clearHistory()" hidden><i data-lucide="trash-2"></i>Clear history</button>
+                    </div>
+                </div>
+                <div class="group" id="history-list"></div>
+            </section>
+
+            <!-- SETTINGS -->
+            <section id="view-settings" class="view-section">
+                <div class="page-head">
+                    <div><h2 class="large-title">Settings</h2></div>
+                </div>
+                <div class="group">
+                    <div class="row">
+                        <span class="row-label">Default language</span>
+                        <span class="row-value">Egyptian Arabic (ar-EG)</span>
+                    </div>
+                    <div class="row">
+                        <span class="row-label">Transcription model</span>
+                        <span class="row-value">CohereLabs/cohere-transcribe-arabic-07-2026</span>
+                    </div>
+                    <div class="row">
+                        <span class="row-label">Summary model</span>
+                        <span class="row-value">qwen2.5:7b-instruct (Ollama)</span>
+                    </div>
+                </div>
+                <p class="footnote">These settings are read-only for now.</p>
+            </section>
+
+        </div>
     </div>
+</div>
 
-    <!-- Notification Toast -->
-    <div id="toast" class="fixed bottom-6 right-6 bg-slate-800 text-white px-4 py-3 rounded-lg shadow-lg flex items-center space-x-3 transform translate-y-20 opacity-0 transition-all duration-300 z-50">
-        <i data-lucide="check-circle" class="w-5 h-5 text-green-400"></i>
-        <span id="toast-msg" class="text-sm font-medium">Action successful</span>
-    </div>
+<div id="toast" role="status" aria-live="polite">
+    <i data-lucide="check-circle-2" class="ok"></i>
+    <span id="toast-msg"></span>
+    <button class="btn btn-primary" id="toast-action" onclick="openLatestReport()">View report</button>
+</div>
 
-    <script src="/script.js"></script>
+<script src="/script.js"></script>
 </body>
 </html>
