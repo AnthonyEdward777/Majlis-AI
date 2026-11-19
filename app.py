@@ -1,21 +1,24 @@
 
 import os
 import uuid
+from datetime import timedelta
 from functools import lru_cache
 from pathlib import Path
 
 import numpy as np
-import ollama
 import soundfile as sf
 import soxr
 import torch
-from flask import Flask, jsonify, render_template, request, send_from_directory
-from pyannote.audio import Pipeline
+from flask import Flask, g, jsonify, render_template, request, send_from_directory
 from transformers import AutoProcessor, CohereAsrForConditionalGeneration
 from transformers.audio_utils import mel_filter_bank
 from transformers.models.cohere_asr import feature_extraction_cohere_asr
 from werkzeug.utils import secure_filename
 
+import eagle_diar
+import accounts
+from db import init_db
+from insights import generate_insights
 from alignment import (
     align_transcript_words,
     assign_speakers_to_words,
@@ -30,6 +33,12 @@ from alignment import (
 app = Flask(__name__)
 
 PROJECT_DIR = Path(__file__).resolve().parent
+
+app.secret_key = accounts.load_secret_key(PROJECT_DIR)
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=30)
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
+init_db()
+app.register_blueprint(accounts.bp)
 
 UPLOAD_DIR = PROJECT_DIR / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -47,7 +56,8 @@ COHERE_MODEL_PATH = Path(
     )
 )
 
-TRANSCRIPTION_LANGUAGE = "ar"
+TRANSCRIPTION_LANGUAGE = os.environ.get("TRANSCRIPTION_LANGUAGE", "ar")  # the Arabic checkpoint was trained for "ar"
+TRANSCRIBE_CHUNKS_PER_BATCH = 2  # audio chunks encoded together; raise it if you have spare RAM
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 MODEL_DTYPE = (
@@ -55,6 +65,10 @@ MODEL_DTYPE = (
 )
 
 SAMPLE_RATE = 16000
+
+# EAGLE speaker enrollment limits (each person reads aloud for about 20 s).
+MAX_SPEAKERS = 20
+MIN_ENROLL_SECONDS = 3.0
 
 
 # --------------------------------------------------
@@ -164,11 +178,28 @@ def transcribe_audio(audio_path):
         dtype=model.dtype,
     )
 
+    # Long audio arrives as many chunks. Encoding them all at once needs memory
+    # proportional to the recording length, so run a couple at a time.
+    pieces = []
     with torch.inference_mode():
-        output_tokens = model.generate(
-            **inputs,
-            max_new_tokens=448,
-        )
+        for start in range(0, len(inputs["input_features"]), TRANSCRIBE_CHUNKS_PER_BATCH):
+            batch = {
+                name: value[start:start + TRANSCRIBE_CHUNKS_PER_BATCH]
+                for name, value in inputs.items()
+            }
+            pieces.append(model.generate(**batch, max_new_tokens=448))
+
+    if len(pieces) == 1:
+        output_tokens = pieces[0]
+    else:
+        # Batches can stop at different lengths: pad to one width, then stack.
+        width = max(piece.shape[1] for piece in pieces)
+        output_tokens = torch.cat([
+            torch.nn.functional.pad(
+                piece, (0, width - piece.shape[1]), value=model.config.pad_token_id
+            )
+            for piece in pieces
+        ])
 
     if audio_chunk_index is not None:
         decoded = processor.decode(
@@ -192,70 +223,60 @@ def transcribe_audio(audio_path):
 
 
 # --------------------------------------------------
-# Pyannote speaker-diarization model
+# EAGLE speaker diarization (enrolled voices)
 # --------------------------------------------------
 
-@lru_cache(maxsize=1)
-def get_diarization_pipeline():
-    """Load the pyannote diarization pipeline once."""
+def diarize_audio(audio_path, enrollment_paths):
+    """Return speaker turns with start/end timestamps.
 
-    pipeline = Pipeline.from_pretrained(
-        "pyannote/speaker-diarization-community-1"
-    )
-
-    if pipeline is None:
-        raise RuntimeError(
-            "Could not load the pyannote diarization model."
-        )
-
-    pipeline.to(torch.device(DEVICE))
-
-    return pipeline
-
-
-def diarize_audio(audio_path, num_speakers=None):
-    """Return detected speaker turns with start/end timestamps.
-
-    num_speakers=None lets pyannote estimate the count itself.
+    enrollment_paths maps each speaker's name to a short recording of
+    their voice; every detected turn is labelled with one of those names.
     """
 
-    pipeline = get_diarization_pipeline()
-
-    waveform, sample_rate = sf.read(
-        audio_path,
-        dtype="float32",
-        always_2d=True,
-    )
-
-    # Convert from (samples, channels) to (channels, samples).
-    waveform = waveform.T
-
-    audio_data = {
-        "waveform": torch.from_numpy(waveform.copy()),
-        "sample_rate": sample_rate,
+    enrollments = {
+        name: load_audio(path)
+        for name, path in enrollment_paths.items()
     }
 
-    diarization = pipeline(audio_data, num_speakers=num_speakers)
+    for name, sample in enrollments.items():
+        if len(sample) < MIN_ENROLL_SECONDS * SAMPLE_RATE:
+            raise ValueError(
+                f"The voice sample for {name} is shorter than "
+                f"{MIN_ENROLL_SECONDS:g} seconds."
+            )
 
-    # Support the pyannote.audio 4.x result format.
-    annotation = getattr(
-        diarization,
-        "speaker_diarization",
-        diarization,
+    return eagle_diar.diarize(
+        load_audio(audio_path),
+        enrollments,
+        eagle_diar.make_embedder(torch.device(DEVICE)),
     )
 
-    segments = []
 
-    for turn, _, speaker in annotation.itertracks(
-        yield_label=True
-    ):
-        segments.append({
-            "start": round(float(turn.start), 2),
-            "end": round(float(turn.end), 2),
-            "speaker": str(speaker),
-        })
+def read_enrollment_form(form, files):
+    """Read speaker names and voice samples from the upload form.
 
-    return segments
+    Returns (speakers, error). speakers is a list of (name, file).
+    """
+
+    names = [name.strip() for name in form.getlist("speaker_name")]
+    samples = files.getlist("speaker_sample")
+
+    if not names:
+        return None, "Record a voice sample for at least one speaker."
+
+    if len(names) > MAX_SPEAKERS:
+        return None, f"At most {MAX_SPEAKERS} speakers are supported."
+
+    if len(samples) != len(names) or not all(s and s.filename for s in samples):
+        return None, "Every speaker needs a recorded voice sample."
+
+    if not all(names):
+        return None, "Every speaker needs a name."
+
+    if len({name.casefold() for name in names}) != len(names):
+        return None, "Speaker names must be different."
+
+    return list(zip(names, samples)), None
 
 
 # --------------------------------------------------
@@ -280,6 +301,7 @@ def script():
 # --------------------------------------------------
 
 @app.route("/analyze", methods=["POST"])
+@accounts.member_required
 def analyze():
     file = request.files.get("audio")
 
@@ -288,17 +310,11 @@ def analyze():
             "error": "No audio file uploaded."
         }), 400
 
-    # Optional speaker count; blank means let pyannote estimate it.
-    num_speakers = request.form.get("num_speakers", "").strip()
+    # EAGLE needs every speaker's name and a short voice sample.
+    speakers, error = read_enrollment_form(request.form, request.files)
 
-    if num_speakers:
-        if not num_speakers.isdigit() or not 1 <= int(num_speakers) <= 20:
-            return jsonify({
-                "error": "Number of speakers must be between 1 and 20."
-            }), 400
-        num_speakers = int(num_speakers)
-    else:
-        num_speakers = None
+    if error:
+        return jsonify({"error": error}), 400
 
     # Generate a unique filename for the uploaded recording.
     extension = Path(
@@ -306,9 +322,24 @@ def analyze():
     ).suffix
 
     filepath = UPLOAD_DIR / f"{uuid.uuid4().hex}{extension}"
-    file.save(filepath)
+    enrollment_paths = {}
 
     try:
+        file.save(filepath)
+
+        for name, sample in speakers:
+            sample_path = UPLOAD_DIR / f"{uuid.uuid4().hex}.wav"
+            enrollment_paths[name] = sample_path
+            sample.save(sample_path)
+
+        # Validate: the file must be readable audio that is not empty.
+        try:
+            info = sf.info(filepath)
+        except Exception:
+            return jsonify({"error": "That file isn't readable audio. Upload a WAV or MP3 recording."}), 400
+        if info.frames == 0:
+            return jsonify({"error": "The recording is empty."}), 400
+
         # ------------------------------------------
         # Step 1: Transcribe with Cohere
         # ------------------------------------------
@@ -316,37 +347,23 @@ def analyze():
         transcript = transcribe_audio(filepath)
 
         # ------------------------------------------
-        # Step 2: Detect speaker turns with pyannote
+        # Step 2: Detect speaker turns with EAGLE
         # ------------------------------------------
 
-        speaker_segments = diarize_audio(filepath, num_speakers)
+        speaker_segments = diarize_audio(filepath, enrollment_paths)
 
         # ------------------------------------------
-        # Step 3: Generate the meeting summary with Qwen
+        # Step 3: Summary, decisions and action items from the local LLM
         # ------------------------------------------
 
-        prompt = f"""
-        Read this Egyptian Arabic meeting transcript:
-        {transcript}
-
-        Write a short summary of the meeting. Reply with the summary only.
-        """
-
-        # Only the summary comes from the LLM: asking it to rewrite the
-        # whole transcript made long recordings loop into truncated JSON.
-        response = ollama.chat(
-            model="qwen2.5:7b-instruct",
-            messages=[
-                {
-                    "role": "user",
-                    "content": prompt,
-                }
-            ],
-            options={"num_predict": 1024},
-        )
+        # The model returns only these small fields, never the transcript itself:
+        # asking it to rewrite the whole transcript made long recordings loop.
+        insights = generate_insights(transcript)
 
         result = {
-            "summary": response["message"]["content"].strip(),
+            "summary": insights["summary"],
+            "decisions": insights["decisions"],
+            "action_items": insights["action_items"],
             # Fallback display when word alignment fails.
             "transcript": [
                 {"speaker": "UNKNOWN", "text": transcript}
@@ -408,8 +425,15 @@ def analyze():
 
             result["speaker_transcript"] = []
 
-        # Preserve the original pyannote segments.
+        # Preserve the original EAGLE segments and the enrolled names.
         result["speaker_segments"] = speaker_segments
+        result["speakers"] = list(enrollment_paths)
+
+        # Save for the signed-in user; a database error must not discard the analysis.
+        try:
+            result["meeting_id"] = accounts.save_meeting(g.user["id"], file.filename, result)
+        except Exception:
+            app.logger.exception("Saving the meeting failed")
 
         return jsonify(result)
 
@@ -424,8 +448,11 @@ def analyze():
         }), 500
 
     finally:
-        # Delete the temporary uploaded recording.
+        # Delete the temporary recording and voice samples.
         filepath.unlink(missing_ok=True)
+
+        for sample_path in enrollment_paths.values():
+            sample_path.unlink(missing_ok=True)
 
 
 # --------------------------------------------------
@@ -433,4 +460,4 @@ def analyze():
 # --------------------------------------------------
 
 if __name__ == "__main__":
-    app.run(port=5000)
+    app.run(port=int(os.environ.get("PORT", 5000)))

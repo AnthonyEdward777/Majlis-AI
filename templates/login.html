@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light dark">
+    <title>{{ 'Set up' if mode == 'register' else 'Sign in' }} · Majlis</title>
+    <link rel="stylesheet" href="/static/auth.css">
+</head>
+<body>
+<main class="card">
+    <div class="brand"><img src="/static/majlis.logo.jpeg" alt="">Majlis</div>
+    <h1>{{ 'Set up Majlis' if mode == 'register' else 'Welcome back' }}</h1>
+    <p class="sub">{{ 'Create the administrator account. You can add everyone else from the admin page.' if mode == 'register' else 'Sign in to your meetings. Need an account? Ask your administrator.' }}</p>
+    {% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
+    <form method="post">
+        <label for="username">Username</label>
+        <input id="username" name="username" autocomplete="username" required autofocus>
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" required
+               autocomplete="{{ 'new-password' if mode == 'register' else 'current-password' }}">
+        {% if mode == 'register' %}
+        <label for="confirm">Confirm password</label>
+        <input id="confirm" name="confirm" type="password" required autocomplete="new-password">
+        {% endif %}
+        <button class="btn block" type="submit">{{ 'Create administrator' if mode == 'register' else 'Sign in' }}</button>
+    </form>
+</main>
+</body>
+</html>

@@ -1,5 +1,10 @@
 lucide.createIcons();
 
+// Roles from the SRS: 1 Admin, 2 Executive, 3 Normal User. The server enforces them; this only shapes the page.
+const ROLE = Number(document.body.dataset.role);
+const IS_ADMIN = ROLE === 1;
+const IS_EXEC = ROLE === 2;
+
 // GSAP comes from a CDN. Without it (or with reduced motion) everything still works, just without motion.
 const hasGsap = typeof window.gsap !== 'undefined';
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -21,6 +26,7 @@ const pageTitles = {
     loading: 'New Analysis',
     results: 'Meeting Report',
     history: 'History',
+    admin: 'Admin',
     settings: 'Settings'
 };
 
@@ -28,36 +34,66 @@ const mainEl = document.getElementById('main');
 const toolbar = document.getElementById('toolbar');
 
 // ---------------------------------------------------------------------------
-// Saved reports (this browser only). Storage can be unavailable, so every call is guarded.
+// Saved reports live in the server database (per user). This is an in-memory copy for fast rendering.
 // ---------------------------------------------------------------------------
-const STORE_KEY = 'majlis.reports.v1';
-const MAX_REPORTS = 25;
+let reportCache = [];
 
 function loadReports() {
-    try { return JSON.parse(localStorage.getItem(STORE_KEY)) || []; } catch { return []; }
+    return reportCache;
 }
 
-function saveReports(reports) {
-    // Drop the oldest reports until it fits; transcripts can be large.
-    for (let list = reports.slice(0, MAX_REPORTS); list.length; list = list.slice(0, -1)) {
-        try { localStorage.setItem(STORE_KEY, JSON.stringify(list)); return; } catch { /* try smaller */ }
-    }
+async function refreshReports() {
+    if (IS_ADMIN) return; // admins never load meetings
+    try {
+        const res = await fetch('/api/reports');
+        if (res.status === 401) { location.href = '/login'; return; }
+        if (res.ok) reportCache = await res.json();
+    } catch { /* offline: keep what we have */ }
+    renderDashboard();
+    if (currentView === 'history') renderHistory();
 }
 
-function addReport(report) {
-    saveReports([report, ...loadReports().filter(r => r.id !== report.id)]);
+// The server already saved the meeting during /analyze; this just adds it to the local list.
+function addReport(report, saved) {
+    reportCache = [report, ...reportCache];
+    if (!saved) showToast('This report could not be saved to your history.', true);
 }
 
-function getReport(id) {
-    return loadReports().find(r => r.id === id) || (currentReport && currentReport.id === id ? currentReport : null);
+// The list holds metadata only; a meeting's transcript is fetched when it is opened.
+async function getReport(id) {
+    const cached = reportCache.find(r => r.id === id) || (currentReport && currentReport.id === id ? currentReport : null);
+    if (cached && cached.lines) return cached;
+    try {
+        const res = await fetch(`/api/reports/${encodeURIComponent(id)}`);
+        if (res.ok) {
+            const full = await res.json();
+            reportCache = reportCache.map(r => r.id === id ? full : r);
+            return full;
+        }
+    } catch { /* fall through */ }
+    return null;
 }
 
-function clearHistory() {
-    if (!confirm('Delete all saved reports from this browser? This cannot be undone.')) return;
-    try { localStorage.removeItem(STORE_KEY); } catch { /* nothing saved */ }
+async function clearHistory() {
+    if (!confirm('Delete all of your own saved reports? This cannot be undone.')) return;
+    try {
+        const res = await fetch('/api/reports', { method: 'DELETE' });
+        if (!res.ok) throw new Error();
+    } catch { showToast('Could not clear history.', true); return; }
+    reportCache = reportCache.filter(r => !r.mine);
     renderHistory();
     renderDashboard();
     showToast('History cleared');
+}
+
+async function deleteReportRow(r) {
+    if (!confirm(`Delete "${r.title || r.fileName}"? This cannot be undone.`)) return;
+    try { await api('DELETE', `/api/reports/${encodeURIComponent(r.id)}`); }
+    catch (error) { showToast(error.message, true); return; }
+    reportCache = reportCache.filter(x => x.id !== r.id);
+    renderHistory();
+    renderDashboard();
+    showToast('Meeting deleted');
 }
 
 // ---------------------------------------------------------------------------
@@ -78,6 +114,7 @@ function switchView(viewId) {
     if (viewId === 'analyze' && job) viewId = 'loading';
     if (viewId === 'dashboard') renderDashboard();
     if (viewId === 'history') renderHistory();
+    if (viewId === 'admin') renderAdmin();
 
     const changed = viewId !== currentView;
     currentView = viewId;
@@ -150,7 +187,9 @@ function reportMeta(r) {
     return parts.join(', ');
 }
 
-function meetingRow(r) {
+function meetingRow(r, deletable) {
+    const wrap = document.createElement('div');
+    wrap.className = 'meeting-wrap';
     const row = document.createElement('button');
     row.className = 'meeting';
     row.onclick = () => openReport(r.id, true);
@@ -161,9 +200,26 @@ function meetingRow(r) {
             <span class="meeting-meta num" style="display:block"></span>
         </span>
         <i data-lucide="chevron-right"></i>`;
-    row.querySelector('.meeting-name').textContent = r.fileName;
-    row.querySelector('.meeting-meta').textContent = reportMeta(r);
-    return row;
+    row.querySelector('.meeting-name').textContent = r.title || r.fileName;
+    const meta = row.querySelector('.meeting-meta');
+    meta.textContent = reportMeta(r);
+    if (r.mine === false) {
+        const who = document.createElement('span');
+        who.className = 'meeting-owner';
+        who.textContent = `${r.owner}: `;
+        meta.prepend(who);
+    }
+    wrap.appendChild(row);
+    if (deletable && r.mine !== false) {
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'icon-btn btn-danger';
+        del.setAttribute('aria-label', `Delete ${r.title || r.fileName}`);
+        del.innerHTML = '<i data-lucide="trash-2"></i>';
+        del.onclick = () => deleteReportRow(r);
+        wrap.appendChild(del);
+    }
+    return wrap;
 }
 
 function emptyState(icon, title, text, withButton) {
@@ -183,7 +239,7 @@ function emptyState(icon, title, text, withButton) {
 }
 
 function renderDashboard() {
-    const reports = loadReports();
+    const reports = loadReports().filter(r => r.mine !== false);
     const hours = reports.reduce((sum, r) => sum + (r.duration || 0), 0) / 3600;
     document.getElementById('stat-meetings').textContent = reports.length;
     document.getElementById('stat-hours').textContent = hours.toFixed(1) + 'h';
@@ -198,12 +254,23 @@ function renderDashboard() {
 }
 
 function renderHistory() {
-    const reports = loadReports();
+    const all = loadReports();
+    const query = (document.getElementById('history-search').value || '').toLowerCase().trim();
+    const scope = (document.getElementById('history-scope') || {}).value || 'all';
+    const days = Number(document.getElementById('history-range').value);
+    const reports = all.filter(r => {
+        if (scope === 'mine' && r.mine === false) return false;
+        if (scope === 'team' && r.mine !== false) return false;
+        if (days && Date.now() - r.createdAt > days * 86400000) return false;
+        const haystack = `${r.title} ${r.fileName} ${r.summary} ${r.owner}`.toLowerCase();
+        return query.split(/\s+/).every(term => haystack.includes(term));
+    });
     const list = document.getElementById('history-list');
     list.replaceChildren();
-    if (reports.length) reports.forEach(r => list.appendChild(meetingRow(r)));
+    if (reports.length) reports.forEach(r => list.appendChild(meetingRow(r, true)));
+    else if (all.length) list.appendChild(emptyState('search-x', 'No meetings match', 'Try a different search or date range.', false));
     else list.appendChild(emptyState('clock-3', 'No reports yet', 'Every analysis you run is saved here so you can open it again later.', true));
-    document.getElementById('clear-history').hidden = !reports.length;
+    document.getElementById('clear-history').hidden = !all.some(r => r.mine !== false);
     lucide.createIcons();
 }
 
@@ -280,7 +347,7 @@ function handleFileSelect(event) {
 
     uploadPrompt.style.display = 'none';
     filePreview.classList.add('flex');
-    btnAnalyze.disabled = false;
+    updateAnalyzeButton();
     updateWaves();
 
     if (animate) gsap.fromTo(filePreview, { autoAlpha: 0, y: 10, scale: 0.97 }, { autoAlpha: 1, y: 0, scale: 1, duration: 0.5, clearProps: 'transform,visibility' });
@@ -291,7 +358,7 @@ function resetUpload() {
     selectedFile = null;
     filePreview.classList.remove('flex');
     uploadPrompt.style.display = '';
-    btnAnalyze.disabled = true;
+    updateAnalyzeButton();
     updateWaves();
 }
 
@@ -302,20 +369,274 @@ function clearFile(event) {
     if (animate) gsap.fromTo(uploadPrompt, { autoAlpha: 0, y: 6 }, { autoAlpha: 1, y: 0, duration: 0.4, clearProps: 'transform,visibility' });
 }
 
-// Speakers stepper. An empty value means auto-detect, which the backend expects.
+// ---------------------------------------------------------------------------
+// Speakers. EAGLE diarization recognises voices it has heard before, so every
+// speaker reads aloud for about 20 seconds. Samples are recorded here, turned
+// into 16 kHz mono WAV in the browser and sent along with the meeting.
+// ---------------------------------------------------------------------------
 const MAX_SPEAKERS = 20;
-function stepSpeakers(delta) {
-    const input = document.getElementById('num_speakers');
-    const current = parseInt(input.value, 10) || 0; // 0 means Auto
-    const next = Math.min(MAX_SPEAKERS, Math.max(0, current + delta));
-    input.value = next === 0 ? '' : String(next);
+const ENROLL_SECONDS = 20;
+const MIN_ENROLL_SECONDS = 5;
+const ENROLL_RATE = 16000;
 
-    const label = document.getElementById('speaker-count');
-    label.textContent = next === 0 ? 'Auto' : String(next);
-    document.getElementById('spk-minus').disabled = next === 0;
-    document.getElementById('spk-plus').disabled = next === MAX_SPEAKERS;
-    if (animate) gsap.fromTo(label, { y: delta > 0 ? 6 : -6, autoAlpha: 0 }, { y: 0, autoAlpha: 1, duration: 0.3, ease: 'power3.out', clearProps: 'transform,visibility' });
+const speakerList = document.getElementById('speaker-list');
+const analyzeHint = document.getElementById('analyze-hint');
+let speakers = [];        // { id, name, sample: Blob|null, url, duration, busy, el }
+let nextSpeakerId = 1;
+let recorder = null;      // { speaker, mediaRecorder, stream, chunks, startedAt, timer }
+const samplePlayer = new Audio();
+let playingSpeaker = null;
+
+function speakerInitial(name) {
+    const first = [...(name || '').trim()][0];
+    return first ? first.toUpperCase() : '?';
 }
+
+function addSpeaker(focus = true) {
+    if (speakers.length >= MAX_SPEAKERS) return;
+    const s = { id: nextSpeakerId++, name: `Speaker ${speakers.length + 1}`, sample: null, url: null, duration: 0, busy: false };
+
+    const block = document.createElement('div');
+    block.className = 'speaker-block';
+    block.innerHTML = `
+        <div class="speaker-row">
+            <div class="avatar" aria-hidden="true"></div>
+            <input class="speaker-name" type="text" maxlength="40" autocomplete="off" aria-label="Speaker name">
+            <span class="sample-status num"></span>
+            <div class="speaker-actions">
+                <button type="button" class="btn btn-secondary btn-record"></button>
+                <button type="button" class="btn icon-btn btn-play" aria-label="Play voice sample"><i data-lucide="play"></i></button>
+                <button type="button" class="btn icon-btn btn-remove" aria-label="Remove speaker"><i data-lucide="trash-2"></i></button>
+            </div>
+        </div>
+        <div class="rec-meter" aria-hidden="true"><span></span></div>`;
+
+    s.el = {
+        block,
+        avatar: block.querySelector('.avatar'),
+        input: block.querySelector('.speaker-name'),
+        status: block.querySelector('.sample-status'),
+        record: block.querySelector('.btn-record'),
+        play: block.querySelector('.btn-play'),
+        remove: block.querySelector('.btn-remove'),
+        meter: block.querySelector('.rec-meter span')
+    };
+    s.el.input.value = s.name;
+    s.el.input.addEventListener('input', () => { s.name = s.el.input.value; refreshSpeakers(); });
+    s.el.record.addEventListener('click', () => toggleRecording(s));
+    s.el.play.addEventListener('click', () => togglePlayback(s));
+    s.el.remove.addEventListener('click', () => removeSpeaker(s));
+
+    speakers.push(s);
+    speakerList.appendChild(block);
+    refreshSpeakers();
+    lucide.createIcons();
+
+    if (animate) gsap.fromTo(block, { autoAlpha: 0, y: -6 }, { autoAlpha: 1, y: 0, duration: 0.35, clearProps: 'transform,visibility' });
+    if (focus) s.el.input.select();
+}
+
+function removeSpeaker(s) {
+    if (recorder && recorder.speaker === s) cancelRecording();
+    if (playingSpeaker === s) stopPlayback();
+    if (s.url) URL.revokeObjectURL(s.url);
+    speakers = speakers.filter(x => x !== s);
+    s.el.block.remove();
+    refreshSpeakers();
+}
+
+function speakerProblems() {
+    const names = speakers.map(s => s.name.trim());
+    const missing = speakers.filter(s => !s.sample).map(s => s.name.trim() || 'every speaker');
+    if (!speakers.length) return 'Add at least one speaker.';
+    if (names.some(n => !n)) return 'Give every speaker a name.';
+    if (new Set(names.map(n => n.toLowerCase())).size !== names.length) return 'Two speakers have the same name.';
+    if (recorder || speakers.some(s => s.busy)) return 'Finish the recording first.';
+    if (missing.length) return `Record a voice sample for ${missing.slice(0, 2).join(' and ')}${missing.length > 2 ? ` and ${missing.length - 2} more` : ''}.`;
+    return '';
+}
+
+function updateAnalyzeButton() {
+    const problem = !selectedFile ? 'Choose the meeting recording.' : speakerProblems();
+    btnAnalyze.disabled = Boolean(problem);
+    analyzeHint.textContent = problem;
+}
+
+// Redraw every speaker row from its state.
+function refreshSpeakers() {
+    const names = speakers.map(s => s.name.trim().toLowerCase());
+    speakers.forEach((s, i) => {
+        const isRecording = recorder && recorder.speaker === s;
+        const otherBusy = (recorder && !isRecording) || s.busy;
+        const { avatar, input, status, record, play, remove, block } = s.el;
+
+        avatar.style.background = speakerColors[i % speakerColors.length];
+        avatar.textContent = speakerInitial(s.name);
+        input.setAttribute('aria-invalid', String(!s.name.trim() || names.indexOf(s.name.trim().toLowerCase()) !== i));
+
+        block.classList.toggle('is-recording', Boolean(isRecording));
+        status.className = 'sample-status num' + (isRecording ? ' is-recording' : s.sample ? ' is-ready' : '');
+        if (s.busy) status.textContent = 'Processing…';
+        else if (isRecording) status.textContent = `${formatTime(recorderElapsed())} / ${formatTime(ENROLL_SECONDS)}`;
+        else status.textContent = s.sample ? `${formatTime(s.duration)} recorded` : 'No voice sample';
+
+        record.disabled = Boolean(otherBusy);
+        record.classList.toggle('is-recording', Boolean(isRecording));
+        record.innerHTML = isRecording ? '<span class="rec-dot"></span>Stop'
+            : `<i data-lucide="mic"></i>${s.sample ? 'Re-record' : 'Record'}`;
+        record.setAttribute('aria-label', isRecording ? `Stop recording ${s.name}` : `Record a voice sample for ${s.name || 'this speaker'}`);
+
+        play.hidden = !s.sample || isRecording;
+        play.innerHTML = `<i data-lucide="${playingSpeaker === s ? 'square' : 'play'}"></i>`;
+        remove.disabled = Boolean(isRecording || s.busy);
+    });
+    document.getElementById('add-speaker').disabled = speakers.length >= MAX_SPEAKERS;
+    lucide.createIcons();
+    updateAnalyzeButton();
+}
+
+function recorderElapsed() {
+    return recorder ? (performance.now() - recorder.startedAt) / 1000 : 0;
+}
+
+async function toggleRecording(s) {
+    if (recorder) {
+        if (recorder.speaker === s) stopRecording();
+        return;
+    }
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+        showToast('This browser cannot record audio. Try a current Chrome, Edge, Firefox or Safari.', true);
+        return;
+    }
+    stopPlayback();
+
+    let stream;
+    try {
+        // Keep the voice as natural as possible: the meeting recording will not be noise-suppressed either.
+        stream = await navigator.mediaDevices.getUserMedia({
+            audio: { channelCount: 1, echoCancellation: false, noiseSuppression: false, autoGainControl: true }
+        });
+    } catch (err) {
+        showToast(err && err.name === 'NotAllowedError'
+            ? 'Microphone access is blocked. Allow it from the address bar and try again.'
+            : 'No microphone was found.', true);
+        return;
+    }
+
+    const mediaRecorder = new MediaRecorder(stream);
+    const chunks = [];
+    mediaRecorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+    const rec = { speaker: s, mediaRecorder, stream, chunks, startedAt: performance.now(), timer: null, cancelled: false };
+    recorder = rec;
+    mediaRecorder.onstop = () => finishRecording(rec);
+    mediaRecorder.start(250);
+
+    recorder.timer = setInterval(() => {
+        const elapsed = recorderElapsed();
+        s.el.meter.style.width = `${Math.min(100, (elapsed / ENROLL_SECONDS) * 100)}%`;
+        s.el.status.textContent = `${formatTime(elapsed)} / ${formatTime(ENROLL_SECONDS)}`;
+        if (elapsed >= ENROLL_SECONDS) stopRecording();
+    }, 200);
+    s.el.meter.style.width = '0%';
+    refreshSpeakers();
+}
+
+function stopRecording() {
+    if (!recorder || recorder.mediaRecorder.state === 'inactive') return;
+    recorder.duration = recorderElapsed();
+    clearInterval(recorder.timer);
+    recorder.mediaRecorder.stop(); // finishRecording runs from onstop
+}
+
+function cancelRecording() {
+    if (!recorder) return;
+    recorder.cancelled = true;
+    stopRecording();
+}
+
+async function finishRecording(rec) {
+    if (!rec) return;
+    rec.stream.getTracks().forEach(t => t.stop());
+    recorder = null;
+    const s = rec.speaker;
+
+    if (rec.cancelled) { refreshSpeakers(); return; }
+    if (rec.duration < MIN_ENROLL_SECONDS) {
+        refreshSpeakers();
+        showToast(`Keep reading for at least ${MIN_ENROLL_SECONDS} seconds; 20 is best.`, true);
+        return;
+    }
+
+    s.busy = true;
+    refreshSpeakers();
+    try {
+        const wav = await toWav16k(new Blob(rec.chunks, { type: rec.mediaRecorder.mimeType || 'audio/webm' }));
+        if (!speakers.includes(s)) return; // removed while processing
+        // Check the audio that was actually captured, not the clock.
+        if (wav.duration < MIN_ENROLL_SECONDS) {
+            showToast(`Only ${wav.duration.toFixed(1)} s of audio was captured. Please record again; 20 seconds is best.`, true);
+            return;
+        }
+        if (s.url) URL.revokeObjectURL(s.url);
+        s.sample = wav.blob;
+        s.duration = wav.duration;
+        s.url = URL.createObjectURL(wav.blob);
+    } catch (err) {
+        console.error(err);
+        showToast('Could not process the recording. Please record again.', true);
+    } finally {
+        s.busy = false;
+        refreshSpeakers();
+    }
+}
+
+// Decode whatever the browser recorded (WebM/Opus, MP4/AAC…) and resample to 16 kHz mono WAV.
+async function toWav16k(blob) {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    const ctx = new Ctx();
+    let decoded;
+    try { decoded = await ctx.decodeAudioData(await blob.arrayBuffer()); } finally { ctx.close(); }
+
+    const offline = new OfflineAudioContext(1, Math.max(1, Math.ceil(decoded.duration * ENROLL_RATE)), ENROLL_RATE);
+    const source = offline.createBufferSource();
+    source.buffer = decoded;
+    source.connect(offline.destination); // channels are mixed down to mono
+    source.start();
+    const rendered = await offline.startRendering();
+    return { blob: encodeWav(rendered.getChannelData(0), ENROLL_RATE), duration: rendered.duration };
+}
+
+function encodeWav(samples, rate) {
+    const view = new DataView(new ArrayBuffer(44 + samples.length * 2));
+    const text = (offset, str) => { for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i)); };
+    text(0, 'RIFF'); view.setUint32(4, 36 + samples.length * 2, true); text(8, 'WAVE');
+    text(12, 'fmt '); view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+    view.setUint32(24, rate, true); view.setUint32(28, rate * 2, true); view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+    text(36, 'data'); view.setUint32(40, samples.length * 2, true);
+    for (let i = 0; i < samples.length; i++) {
+        const v = Math.max(-1, Math.min(1, samples[i]));
+        view.setInt16(44 + i * 2, v < 0 ? v * 0x8000 : v * 0x7fff, true);
+    }
+    return new Blob([view], { type: 'audio/wav' });
+}
+
+function togglePlayback(s) {
+    if (playingSpeaker === s) { stopPlayback(); return; }
+    stopPlayback();
+    if (!s.url) return;
+    playingSpeaker = s;
+    samplePlayer.src = s.url;
+    samplePlayer.play().catch(() => stopPlayback());
+    refreshSpeakers();
+}
+
+function stopPlayback() {
+    if (!playingSpeaker) return;
+    samplePlayer.pause();
+    playingSpeaker = null;
+    refreshSpeakers();
+}
+samplePlayer.addEventListener('ended', stopPlayback);
 
 // ---------------------------------------------------------------------------
 // Analysis. The request keeps running while the user moves between pages.
@@ -335,7 +656,7 @@ function setStep(id, state) {
 let statusInterval;
 
 function startProgress(fileName) {
-    const statuses = ['Aligning audio…', 'Transcribing speech…', 'Separating speakers…', 'Writing the summary…', 'Finishing the report…'];
+    const statuses = ['Aligning audio…', 'Transcribing speech…', 'Matching voices to speakers…', 'Writing the summary…', 'Finishing the report…'];
     let i = 0;
     const statusEl = document.getElementById('loading-status');
     statusEl.textContent = statuses[0];
@@ -369,17 +690,34 @@ function stopProgress() {
 }
 
 function buildReport(data, fileName) {
+    const base = {
+        id: String(data.meeting_id || Date.now()),
+        title: fileName.replace(/\.[^.]+$/, ''),
+        fileName,
+        createdAt: Date.now(),
+        summary: data.summary || '',
+        mine: true,
+        owner: '',
+        alignmentError: Boolean(data.alignment_error)
+    };
+    if (data.meeting_id) {
+        // Saved on the server: the full report (with line ids for editing) loads when it is opened.
+        const turns = data.speaker_transcript?.length ? data.speaker_transcript : [];
+        const ends = turns.map(l => Number(l.end)).filter(Number.isFinite);
+        return { ...base, duration: ends.length ? Math.max(...ends) : 0,
+                 speakers: new Set(turns.map(l => l.speaker).filter(x => x && x !== 'UNKNOWN')).size };
+    }
     const lines = (data.speaker_transcript?.length ? data.speaker_transcript : (data.transcript || []))
         .map(l => ({ speaker: l.speaker, start: l.start, end: l.end, text: l.text || '' }));
     const ends = lines.map(l => Number(l.end)).filter(Number.isFinite);
     return {
-        id: String(Date.now()),
-        fileName,
-        createdAt: Date.now(),
-        summary: data.summary || '',
-        lines,
+        ...base, lines, unsaved: true, speakerList: [],
+        decisions: data.decisions || [],
+        actionItems: (data.action_items || []).map(a => ({
+            description: a.description, responsiblePerson: a.responsible_person, deadline: a.deadline })),
         duration: ends.length ? Math.max(...ends) : 0,
         speakers: new Set(lines.map(l => l.speaker).filter(s => s && s !== 'UNKNOWN')).size,
+        speakerNames: Array.isArray(data.speakers) ? data.speakers : [],
         alignmentError: Boolean(data.alignment_error)
     };
 }
@@ -390,6 +728,9 @@ async function analyze() {
         showToast('Choose an audio file first.', true);
         return;
     }
+    const problem = speakerProblems();
+    if (problem) { showToast(problem, true); return; }
+    stopPlayback();
 
     const file = selectedFile;
     job = { fileName: file.name };
@@ -399,16 +740,20 @@ async function analyze() {
 
     const formData = new FormData();
     formData.append('audio', file);
-    formData.append('num_speakers', document.getElementById('num_speakers').value);
+    speakers.forEach(s => {
+        formData.append('speaker_name', s.name.trim());
+        formData.append('speaker_sample', s.sample, `speaker-${s.id}.wav`);
+    });
 
     try {
         const res = await fetch('/analyze', { method: 'POST', body: formData });
         let data;
         try { data = await res.json(); } catch { throw new Error(`The server returned an unexpected response (${res.status}).`); }
+        if (res.status === 401) { location.href = '/login'; return; }
         if (!res.ok) throw new Error(data.error || 'Analysis failed.');
 
         const report = buildReport(data, file.name);
-        addReport(report);
+        addReport(report, Boolean(data.meeting_id));
         latestReportId = report.id;
         job = null;
         stopProgress();
@@ -442,14 +787,18 @@ async function analyze() {
 // ---------------------------------------------------------------------------
 const speakerColors = ['#0a7c76', '#5856d6', '#c2185b', '#b25000', '#0062cc', '#6e4fa3'];
 
-function formatSpeakerName(rawName) {
-    if (!rawName || rawName === 'UNKNOWN') return { name: 'Unknown Speaker', index: 0 };
+// names: the enrolled speaker names, in the order they were added (EAGLE reports).
+function formatSpeakerName(rawName, names = []) {
+    if (!rawName || rawName === 'UNKNOWN') return { name: 'Unknown Speaker', index: 0, initial: '?' };
+    const enrolled = names.indexOf(rawName);
+    if (enrolled !== -1) return { name: rawName, index: enrolled, initial: speakerInitial(rawName) };
+    // Older reports from pyannote use SPEAKER_00, SPEAKER_01…
     const match = rawName.match(/SPEAKER_(\d+)/i);
     if (match) {
         const num = parseInt(match[1], 10);
-        return { name: `Speaker ${num + 1}`, index: num };
+        return { name: `Speaker ${num + 1}`, index: num, initial: String(num + 1) };
     }
-    return { name: rawName, index: 0 };
+    return { name: rawName, index: 0, initial: speakerInitial(rawName) };
 }
 
 function escapeHtml(str) {
@@ -466,30 +815,62 @@ function openLatestReport() {
     if (latestReportId) openReport(latestReportId, false);
 }
 
-function openReport(id, fromHistory) {
-    const report = getReport(id);
-    if (!report) { showToast('That report is no longer saved in this browser.', true); return; }
+async function openReport(id, fromHistory) {
+    const report = await getReport(id);
+    if (!report) { showToast('That report is no longer saved.', true); return; }
     currentReport = { ...report, fromHistory };
     renderReport(currentReport);
     if (id === latestReportId) setNavNews(false);
     switchView('results');
 }
 
+function setParagraphs(el, text) {
+    el.replaceChildren(...(text || 'No summary returned.').split('\n').filter(p => p.trim()).map(p => {
+        const node = document.createElement('p');
+        node.textContent = p.trim();
+        return node;
+    }));
+}
+
 function renderReport(report) {
-    document.getElementById('report-meta').textContent = `${report.fileName}, ${reportMeta(report)}`;
-    document.getElementById('summary').innerHTML = (report.summary || 'No summary returned.')
-        .split('\n')
-        .map(p => p.trim() ? `<p>${escapeHtml(p)}</p>` : '')
-        .join('');
+    const mine = report.mine !== false;
+    document.getElementById('report-title').textContent = report.title || report.fileName;
+    document.getElementById('report-meta').textContent =
+        `${report.fileName}, ${reportMeta(report)}${mine ? '' : `, uploaded by ${report.owner}`}`;
+    // Only the owner can correct, regenerate or delete; an Executive reading a team member's meeting is read-only.
+    document.querySelectorAll('#view-results [data-owner]').forEach(b => { b.hidden = !mine || report.unsaved; });
+    document.getElementById('summary-editor').hidden = true;
+    document.getElementById('summary').hidden = false;
+    setParagraphs(document.getElementById('summary'), report.summary);
+
+    const decisions = document.getElementById('decisions');
+    decisions.replaceChildren(...(report.decisions?.length
+        ? report.decisions.map(d => el('li', '', d))
+        : [el('li', 'insight-empty', 'No decisions were found in this meeting.')]));
+
+    const items = document.getElementById('action-items');
+    items.replaceChildren(...(report.actionItems?.length
+        ? report.actionItems.map(a => {
+            const row = el('div', 'action-row');
+            const meta = el('div', 'action-meta');
+            meta.append(el('span', '', `Responsible: ${a.responsiblePerson || 'Not specified'}`),
+                        el('span', '', `Deadline: ${a.deadline || 'Not specified'}`));
+            row.append(el('div', '', a.description), meta);
+            return row;
+        })
+        : [el('div', 'insight-empty', 'No action items were found in this meeting.')]));
 
     const transcriptDiv = document.getElementById('transcript');
     transcriptDiv.replaceChildren();
     document.getElementById('transcript-search').value = '';
     document.getElementById('no-matches').style.display = 'none';
+    const editable = mine && !report.unsaved;
 
     report.lines.forEach(line => {
-        const speaker = formatSpeakerName(line.speaker);
-        const color = speakerColors[speaker.index % speakerColors.length];
+        const speaker = formatSpeakerName(line.speaker, report.speakerNames);
+        const position = (report.speakerList || []).findIndex(s => s.id === line.speakerId);
+        const colorIndex = position >= 0 ? position : speaker.index;
+        const color = speakerColors[colorIndex % speakerColors.length];
 
         const card = document.createElement('div');
         card.className = 'transcript-card';
@@ -497,18 +878,24 @@ function renderReport(report) {
         const avatar = document.createElement('div');
         avatar.className = 'avatar';
         avatar.style.background = color;
-        avatar.textContent = speaker.name === 'Unknown Speaker' ? '?' : String(speaker.index + 1);
+        avatar.textContent = speaker.initial;
 
         const body = document.createElement('div');
         body.className = 'transcript-body';
         const meta = document.createElement('div');
         meta.className = 'transcript-meta';
 
-        const badge = document.createElement('span');
+        const badge = document.createElement(editable ? 'button' : 'span');
         badge.className = 'speaker-badge';
         badge.style.color = color;
         badge.textContent = speaker.name;
         badge.setAttribute('data-original-text', speaker.name);
+        if (editable) {
+            badge.type = 'button';
+            badge.title = 'Rename this speaker';
+            badge.setAttribute('aria-label', `Rename speaker ${speaker.name}`);
+            badge.onclick = () => renameSpeaker(line);
+        }
 
         const timing = document.createElement('span');
         timing.className = 'transcript-time num';
@@ -523,6 +910,13 @@ function renderReport(report) {
         text.setAttribute('data-original-text', line.text);
 
         meta.append(badge, timing);
+        if (editable) {
+            const edit = el('button', 'btn btn-quiet card-edit', 'Edit');
+            edit.type = 'button';
+            edit.setAttribute('aria-label', `Edit text of ${speaker.name} at ${timing.textContent || 'this line'}`);
+            edit.onclick = () => editLine(line, body, text, edit);
+            meta.appendChild(edit);
+        }
         body.append(meta, text);
         card.append(avatar, body);
         transcriptDiv.appendChild(card);
@@ -533,31 +927,110 @@ function renderReport(report) {
             autoAlpha: 0, y: 8, filter: 'blur(3px)', duration: 0.5, stagger: 0.04, delay: 0.3, clearProps: 'transform,filter,visibility'
         });
     }
+    lucide.createIcons();
 }
 
-function exportReport() {
+// Re-read the saved report after a change so the page shows exactly what the server stored.
+function adoptReport(full) {
+    reportCache = reportCache.map(r => r.id === full.id ? full : r);
+    currentReport = { ...full, fromHistory: currentReport?.fromHistory };
+    renderReport(currentReport);
+}
+
+async function renameMeeting() {
+    const title = prompt('Meeting title', currentReport.title || currentReport.fileName);
+    if (title === null || !title.trim()) return;
+    try { adoptReport(await api('PATCH', `/api/reports/${currentReport.id}`, { title })); showToast('Title saved'); }
+    catch (error) { showToast(error.message, true); }
+}
+
+async function renameSpeaker(line) {
+    const current = formatSpeakerName(line.speaker).name;
+    const label = prompt(`New name for ${current} (applies to every line they speak)`, current);
+    if (label === null || !label.trim()) return;
+    try {
+        await api('PATCH', `/api/reports/${currentReport.id}/speakers/${line.speakerId}`, { label });
+        adoptReport(await api('GET', `/api/reports/${currentReport.id}`));
+        showToast('Speaker renamed');
+    } catch (error) { showToast(error.message, true); }
+}
+
+function editLine(line, body, textEl, editBtn) {
+    const editor = el('div', 'line-editor');
+    const area = el('textarea', 'field area arabic');
+    area.value = line.text;
+    area.dir = 'auto';
+    area.setAttribute('aria-label', 'Edit transcript text');
+    const actions = el('div', 'editor-actions');
+    const cancel = el('button', 'btn btn-secondary', 'Cancel');
+    const save = el('button', 'btn btn-primary', 'Save');
+    cancel.type = save.type = 'button';
+    cancel.onclick = () => { editor.remove(); textEl.hidden = false; editBtn.hidden = false; };
+    save.onclick = async () => {
+        try {
+            await api('PATCH', `/api/reports/${currentReport.id}/segments/${line.id}`, { text: area.value });
+            adoptReport(await api('GET', `/api/reports/${currentReport.id}`));
+            showToast('Line saved');
+        } catch (error) { showToast(error.message, true); }
+    };
+    actions.append(cancel, save);
+    editor.append(area, actions);
+    textEl.hidden = true;
+    editBtn.hidden = true;
+    body.appendChild(editor);
+    area.focus();
+}
+
+function editSummary() {
+    document.getElementById('summary-text').value = currentReport.summary || '';
+    document.getElementById('summary').hidden = true;
+    document.getElementById('summary-editor').hidden = false;
+    document.getElementById('summary-text').focus();
+}
+function cancelSummary() {
+    document.getElementById('summary-editor').hidden = true;
+    document.getElementById('summary').hidden = false;
+}
+async function saveSummary() {
+    try {
+        adoptReport(await api('PATCH', `/api/reports/${currentReport.id}`, { summary: document.getElementById('summary-text').value }));
+        showToast('Summary saved');
+    } catch (error) { showToast(error.message, true); }
+}
+
+async function regenerateReport() {
+    if (!confirm('Re-run the AI over the current transcript? This replaces the summary, decisions and action items (including any edits to them).')) return;
+    const btn = document.getElementById('btn-regenerate');
+    btn.disabled = true;
+    showToast('Regenerating with the local AI model. This can take a minute.');
+    try { adoptReport(await api('POST', `/api/reports/${currentReport.id}/regenerate`)); showToast('Results regenerated'); }
+    catch (error) { showToast(error.message, true); }
+    finally { btn.disabled = false; }
+}
+
+async function deleteMeeting() {
+    if (!confirm('Delete this meeting and its transcript? This cannot be undone.')) return;
+    try { await api('DELETE', `/api/reports/${currentReport.id}`); }
+    catch (error) { showToast(error.message, true); return; }
+    reportCache = reportCache.filter(r => r.id !== currentReport.id);
+    currentReport = null;
+    showToast('Meeting deleted');
+    switchView('history');
+}
+
+// PDF uses the browser's print dialog (save as PDF), which shapes Arabic correctly; DOCX and JSON come from the server.
+function exportReport(format) {
     const r = currentReport;
     if (!r) return;
-    const out = [
-        `Meeting report: ${r.fileName}`,
-        reportMeta(r),
-        '',
-        'EXECUTIVE SUMMARY',
-        r.summary || 'No summary returned.',
-        '',
-        'TRANSCRIPT',
-        ...r.lines.map(l => {
-            const time = Number.isFinite(Number(l.start)) ? `[${formatTime(l.start)}] ` : '';
-            return `${time}${formatSpeakerName(l.speaker).name}: ${l.text}`;
-        })
-    ].join('\n');
-    const url = URL.createObjectURL(new Blob(['﻿' + out], { type: 'text/plain;charset=utf-8' }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = r.fileName.replace(/\.[^.]+$/, '') + ' - report.txt';
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-    showToast('Report exported');
+    if (format === 'pdf') {
+        const previous = document.title;
+        document.title = r.title || r.fileName;
+        window.print();
+        document.title = previous;
+        return;
+    }
+    if (r.unsaved) { showToast('This report was not saved, so only PDF export is available.', true); return; }
+    location.href = `/api/reports/${encodeURIComponent(r.id)}/export?format=${format}`;
 }
 
 function copyText(elementId) {
@@ -642,17 +1115,186 @@ function setToast(visible) {
 if (hasGsap) gsap.set('#toast', { xPercent: -50, x: 0, y: 0, yPercent: -160 });
 
 // Leaving the page would cancel a running analysis, so warn first.
+// Recorded voice samples are lost on reload too.
 window.addEventListener('beforeunload', (e) => {
-    if (job) { e.preventDefault(); e.returnValue = ''; }
+    if (job || recorder || speakers.some(s => s.sample)) { e.preventDefault(); e.returnValue = ''; }
 });
+
+// ---------------------------------------------------------------------------
+// Admin (only exists in the page for administrators; the server enforces it too)
+// ---------------------------------------------------------------------------
+async function api(method, path, body) {
+    const res = await fetch(path, {
+        method, headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined
+    });
+    let data = {};
+    try { data = await res.json(); } catch { /* empty body */ }
+    if (res.status === 401) { location.href = '/login'; throw new Error('Signed out.'); }
+    if (!res.ok) throw new Error(data.error || 'Request failed.');
+    return data;
+}
+
+function formatWhen(iso) {
+    return iso ? new Date(iso).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' }) : 'Never';
+}
+
+function el(tag, className, text) {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+}
+
+function userRow(u, meId, executives) {
+    const row = el('div', 'row admin-row');
+    const main = el('div', 'user-main');
+    const name = el('p', 'user-name', u.username);
+    name.appendChild(el('span', 'pill', u.role));
+    if (!u.isActive) name.appendChild(el('span', 'pill pill-off', 'Disabled'));
+    if (u.locked) name.appendChild(el('span', 'pill pill-warn', 'Locked'));
+    if (u.id === meId) name.appendChild(el('span', 'pill pill-off', 'You'));
+    const team = u.roleId === 2 ? ` · team of ${u.teamSize}` : u.roleId === 3 ? ` · team: ${u.executive || 'none'}` : '';
+    main.append(name, el('p', 'user-meta num',
+        `${u.email || 'no email'}${team} · ${u.meetings} meeting${u.meetings === 1 ? '' : 's'} · last sign-in ${formatWhen(u.lastLogin)}`));
+
+    const actions = el('div', 'user-actions');
+    const act = (label, handler, danger) => {
+        const b = el('button', `btn btn-quiet${danger ? ' btn-danger' : ''}`, label);
+        b.type = 'button';
+        b.setAttribute('aria-label', `${label} for ${u.username}`);
+        b.onclick = handler;
+        actions.appendChild(b);
+    };
+    if (u.roleId === 3) {
+        const pick = el('select', 'field assign');
+        pick.setAttribute('aria-label', `Team for ${u.username}`);
+        pick.append(new Option('No team', ''), ...executives.map(x => new Option(`Team of ${x.username}`, x.id)));
+        pick.value = u.executiveId || '';
+        pick.onchange = () => adminAction(() => api('PATCH', `/api/admin/users/${u.id}`, { executiveId: pick.value ? Number(pick.value) : null }), 'Team updated');
+        actions.appendChild(pick);
+    }
+    act('Reset password', () => openPasswordDialog(u));
+    if (u.locked) act('Unlock', () => adminAction(() => api('PATCH', `/api/admin/users/${u.id}`, { unlock: true }), 'Account unlocked'));
+    if (u.id !== meId && u.roleId !== 1) {
+        act(u.roleId === 2 ? 'Make Normal User' : 'Make Executive',
+            () => adminAction(() => api('PATCH', `/api/admin/users/${u.id}`, { roleId: u.roleId === 2 ? 3 : 2 }), 'Role updated'));
+        act(u.isActive ? 'Disable' : 'Enable', () => adminAction(() => api('PATCH', `/api/admin/users/${u.id}`, { isActive: !u.isActive }), u.isActive ? 'User disabled' : 'User enabled'));
+        act('Delete', () => {
+            if (confirm(`Delete ${u.username} and all of their meetings? This cannot be undone.`)) {
+                adminAction(() => api('DELETE', `/api/admin/users/${u.id}`), 'User deleted');
+            }
+        }, true);
+    }
+    row.append(main, actions);
+    return row;
+}
+
+async function adminAction(fn, doneMessage) {
+    try { await fn(); showToast(doneMessage); } catch (error) { showToast(error.message, true); }
+    renderAdmin();
+}
+
+function teamBlock(title, members) {
+    const block = el('div', 'team-block');
+    block.appendChild(el('h4', '', title));
+    block.appendChild(el('p', 'team-members', members.length ? members.map(m => m.username).join(', ') : 'No members yet.'));
+    return block;
+}
+
+function syncNewTeam() {
+    const isExec = document.getElementById('new-role').value === '2';
+    const pick = document.getElementById('new-team');
+    pick.disabled = isExec;
+    if (isExec) pick.value = '';
+}
+
+async function renderAdmin() {
+    if (!document.getElementById('view-admin')) return;
+    let data;
+    try { data = await api('GET', '/api/admin/overview'); } catch (error) { showToast(error.message, true); return; }
+
+    document.getElementById('adm-users').textContent = data.stats.users;
+    document.getElementById('adm-executives').textContent = data.stats.executives;
+    document.getElementById('adm-meetings').textContent = data.stats.meetings;
+    document.getElementById('adm-hours').textContent = data.stats.hours.toFixed(1) + 'h';
+    document.getElementById('adm-utterances').textContent = data.stats.utterances;
+    document.getElementById('adm-db-version').textContent = data.database.version;
+    document.getElementById('adm-db-size').textContent = data.database.size;
+
+    const executives = data.users.filter(u => u.roleId === 2 && u.isActive);
+    const teamPick = document.getElementById('new-team');
+    const chosen = teamPick.value;
+    teamPick.replaceChildren(new Option('No team', ''), ...executives.map(x => new Option(`Team of ${x.username}`, x.id)));
+    teamPick.value = chosen;
+    syncNewTeam();
+
+    const normals = data.users.filter(u => u.roleId === 3);
+    const teams = document.getElementById('admin-teams');
+    teams.replaceChildren(
+        ...executives.map(x => teamBlock(`Team of ${x.username}`, normals.filter(u => u.executiveId === x.id))),
+        teamBlock('Not on a team', normals.filter(u => !u.executiveId)));
+    if (!executives.length) teams.prepend(el('div', 'insight-empty', 'Create an Executive account to start a team, then assign Normal Users to it below.'));
+
+    document.getElementById('admin-users').replaceChildren(...data.users.map(u => userRow(u, data.me, executives)));
+
+    const audit = document.getElementById('admin-audit');
+    audit.replaceChildren(...(data.audit.length ? data.audit.map(a => {
+        const row = el('div', 'audit-row');
+        row.append(el('span', 'when num', formatWhen(a.at)), el('span', 'what', `${a.actor || 'System'}: ${a.action.replaceAll('_', ' ')}`), el('span', 'detail', a.detail));
+        return row;
+    }) : [el('div', 'empty', 'No activity yet.')]));
+    lucide.createIcons();
+}
+
+const pwDialog = document.getElementById('pw-dialog');
+let pwUser = null;
+function openPasswordDialog(u) {
+    pwUser = u;
+    document.getElementById('pw-for').textContent = `Choose a new password for ${u.username}. Share it with them privately.`;
+    document.getElementById('pw-input').value = '';
+    pwDialog.showModal();
+    document.getElementById('pw-input').focus();
+}
+if (pwDialog) {
+    document.getElementById('pw-cancel').onclick = () => pwDialog.close();
+    document.getElementById('pw-form').addEventListener('submit', () => {
+        const password = document.getElementById('pw-input').value;
+        adminAction(() => api('PATCH', `/api/admin/users/${pwUser.id}`, { password }), 'Password reset');
+    });
+}
+
+const addUserForm = document.getElementById('add-user-form');
+if (addUserForm) {
+    addUserForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const errorEl = document.getElementById('add-user-error');
+        errorEl.textContent = '';
+        try {
+            await api('POST', '/api/admin/users', {
+                username: document.getElementById('new-username').value,
+                email: document.getElementById('new-email').value,
+                password: document.getElementById('new-password').value,
+                roleId: Number(document.getElementById('new-role').value),
+                executiveId: Number(document.getElementById('new-team').value) || null
+            });
+            addUserForm.reset();
+            showToast('Account created');
+            renderAdmin();
+        } catch (error) { errorEl.textContent = error.message; }
+    });
+}
 
 // ---------------------------------------------------------------------------
 // First paint: one orchestrated entrance
 // ---------------------------------------------------------------------------
+addSpeaker(false);
+addSpeaker(false);
 renderDashboard();
+refreshReports();
+if (IS_ADMIN) switchView('admin'); // Admins land on account management, not on meetings
 window.addEventListener('load', () => {
-    moveNavIndicator(document.getElementById('nav-dashboard'), true);
-    if (!animate) return;
+    moveNavIndicator(document.querySelector('.nav-btn.is-active'), true);
+    if (!animate || IS_ADMIN) return;
     gsap.timeline()
         .from('.sidebar', { autoAlpha: 0, x: -16, duration: 0.8 })
         .from('.nav-btn, .nav-group-label', { autoAlpha: 0, x: -8, duration: 0.5, stagger: 0.04, clearProps: 'transform,visibility' }, '<0.15')
