@@ -13,7 +13,7 @@
     <h1>{{ 'Set up Majlis' if mode == 'register' else 'Welcome back' }}</h1>
     <p class="sub">{{ 'Create the administrator account. You can add everyone else from the admin page.' if mode == 'register' else 'Sign in to your meetings. Need an account? Ask your administrator.' }}</p>
     {% if error %}<div class="error" role="alert">{{ error }}</div>{% endif %}
-    <form method="post">
+    <form method="post" id="auth-form">
         <label for="username">Username</label>
         <input id="username" name="username" autocomplete="username" required autofocus>
         <label for="password">Password</label>
@@ -23,8 +23,16 @@
         <label for="confirm">Confirm password</label>
         <input id="confirm" name="confirm" type="password" required autocomplete="new-password">
         {% endif %}
-        <button class="btn block" type="submit">{{ 'Create administrator' if mode == 'register' else 'Sign in' }}</button>
+        <button class="btn block" type="submit" data-busy="{{ 'Creating…' if mode == 'register' else 'Signing in…' }}">{{ 'Create administrator' if mode == 'register' else 'Sign in' }}</button>
     </form>
 </main>
+<script>
+// Loading state: block double submits and say what is happening.
+document.getElementById('auth-form').addEventListener('submit', e => {
+    const b = e.target.querySelector('button[type=submit]');
+    b.disabled = true;
+    b.textContent = b.dataset.busy;
+});
+</script>
 </body>
 </html>
