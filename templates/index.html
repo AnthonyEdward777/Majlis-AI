@@ -14,29 +14,28 @@
     <style>
         /* ---------- Tokens ---------- */
         :root {
-            --wall: #e9ecf0;
-            --surface: rgba(255, 255, 255, 0.86);
+            --wall: #f2f3f5;
+            --surface: #ffffff;
             --surface-solid: #ffffff;
             --surface-2: #f3f4f6;
             --ink: #1d1d1f;
-            --ink-2: #6e6e73;
-            --ink-3: #767679;
+            --ink-2: #5c5c61;
+            --ink-3: #5c5c61;
             --hairline: rgba(0, 0, 0, 0.09);
             --fill: rgba(118, 118, 128, 0.12);
             --fill-strong: rgba(118, 118, 128, 0.2);
             --accent: #0a7c76;
             --accent-hover: #087069;
             --accent-tint: rgba(10, 124, 118, 0.12);
-            --accent-ink: #0a7c76;
-            --glow: rgba(32, 178, 170, 0.45);
+            --accent-ink: #076a65;
             --sand: #e3c28c;
             --danger: #d70015;
-            --glass: rgba(255, 255, 255, 0.5);
+            --glass: #ffffff;
             --glass-edge: rgba(255, 255, 255, 0.7);
-            --glass-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.08), 0 20px 50px -20px rgba(16, 24, 40, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.8);
-            --bar: rgba(233, 236, 240, 0.7);
-            --shadow-group: 0 0 0 0.5px var(--hairline), 0 1px 2px rgba(0, 0, 0, 0.04);
-            --shadow-float: 0 0 0 0.5px rgba(0, 0, 0, 0.06), 0 10px 30px -8px rgba(0, 0, 0, 0.22);
+            --glass-shadow: 0 0 0 1px var(--hairline);
+            --bar: #f2f3f5;
+            --shadow-group: none;
+            --shadow-float: 0 0 0 1px var(--hairline), 0 8px 24px -12px rgba(0, 0, 0, 0.25);
             --radius: 14px;
             --radius-inner: 10px;
             --ease: cubic-bezier(0.2, 0, 0, 1);
@@ -44,7 +43,7 @@
         @media (prefers-color-scheme: dark) {
             :root {
                 --wall: #0c0d10;
-                --surface: rgba(30, 30, 33, 0.82);
+                --surface: #17181b;
                 --surface-solid: #1c1c1e;
                 --surface-2: #2a2a2d;
                 --ink: #f5f5f7;
@@ -57,14 +56,13 @@
                 --accent-hover: #0e736c;
                 --accent-tint: rgba(47, 184, 174, 0.18);
                 --accent-ink: #4fd1c6;
-                --glow: rgba(47, 184, 174, 0.5);
                 --danger: #ff6961;
-                --glass: rgba(40, 40, 44, 0.45);
+                --glass: #17181b;
                 --glass-edge: rgba(255, 255, 255, 0.12);
-                --glass-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.1), 0 24px 60px -20px rgba(0, 0, 0, 0.8), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-                --bar: rgba(12, 13, 16, 0.7);
-                --shadow-group: 0 0 0 0.5px var(--hairline);
-                --shadow-float: 0 0 0 0.5px rgba(255, 255, 255, 0.1), 0 12px 32px -8px rgba(0, 0, 0, 0.7);
+                --glass-shadow: 0 0 0 1px var(--hairline);
+                --bar: #0c0d10;
+                --shadow-group: none;
+                --shadow-float: 0 0 0 1px var(--hairline), 0 8px 24px -12px rgba(0, 0, 0, 0.7);
             }
         }
 
@@ -73,19 +71,10 @@
         html, body { height: 100%; margin: 0; }
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Inter', system-ui, sans-serif; /* SF on Apple devices, Inter elsewhere */
-            font-size: 15px; line-height: 1.47; letter-spacing: -0.009em;
+            font-size: 15px; line-height: 1.47;
             color: var(--ink); background: var(--wall);
             -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
             overflow: hidden;
-        }
-        /* Soft wallpaper so the glass sidebar has something to refract. */
-        body::before {
-            content: ""; position: fixed; inset: -10%; z-index: -1; pointer-events: none;
-            background:
-                radial-gradient(40% 45% at 8% 12%, rgba(32, 178, 170, 0.28), transparent 70%),
-                radial-gradient(35% 40% at 92% 88%, rgba(227, 194, 140, 0.35), transparent 70%),
-                radial-gradient(30% 35% at 70% 8%, rgba(99, 132, 255, 0.12), transparent 70%);
-            filter: blur(20px);
         }
         h1, h2, h3 { margin: 0; text-wrap: balance; }
         p { margin: 0; text-wrap: pretty; }
@@ -106,20 +95,19 @@
             position: relative; z-index: 20; display: flex; flex-direction: column;
             margin: 10px 0 10px 10px; padding: 16px 12px 12px; border-radius: 20px;
             background: var(--glass); box-shadow: var(--glass-shadow);
-            -webkit-backdrop-filter: blur(40px) saturate(190%); backdrop-filter: blur(40px) saturate(190%);
         }
         .brand { display: flex; align-items: center; gap: 10px; padding: 4px 10px 20px; }
         .brand img { width: 30px; height: 30px; border-radius: 8px; object-fit: cover; outline: 1px solid rgba(0,0,0,0.1); outline-offset: -1px; background: #fff; }
-        .brand span { font-size: 16px; font-weight: 600; letter-spacing: -0.02em; }
+        .brand span { font-size: 16px; font-weight: 600; }
         .nav { position: relative; display: flex; flex-direction: column; gap: 2px; }
         .nav-group-label { font-size: 12px; font-weight: 600; color: var(--ink-2); padding: 18px 10px 6px; }
         .nav-btn {
             position: relative; z-index: 1; display: flex; align-items: center; gap: 10px;
-            height: 36px; padding: 0 10px; border-radius: 10px; font-size: 14px; font-weight: 500; color: var(--ink);
+            height: 36px; padding: 0 10px; border-radius: 8px; font-size: 14px; font-weight: 500; color: var(--ink); /* sidebar radius 20 - padding 12 */
             transition: background-color 150ms var(--ease), color 150ms var(--ease);
         }
         .nav-btn svg { width: 18px; height: 18px; color: var(--ink-2); transition: color 150ms var(--ease); }
-        .nav-btn:hover { background: rgba(255, 255, 255, 0.35); }
+        .nav-btn:hover { background: var(--fill); }
         .nav-btn.is-active, .nav-btn.is-active:hover { background: transparent; color: var(--accent-ink); }
         .nav-btn.is-active svg { color: var(--accent-ink); }
         .nav-status { margin-left: auto; display: none; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--accent-ink); }
@@ -127,12 +115,12 @@
         .nav-btn.is-busy .nav-status, .nav-btn.has-news .nav-status { display: inline-flex; }
         .nav-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-tint); }
         #nav-indicator {
-            position: absolute; left: 0; right: 0; top: 0; height: 36px; border-radius: 10px; pointer-events: none; opacity: 0;
-            background: var(--surface-solid); box-shadow: 0 0 0 0.5px var(--hairline), 0 2px 8px -2px rgba(0, 0, 0, 0.12);
+            position: absolute; left: 0; right: 0; top: 0; height: 36px; border-radius: 8px; pointer-events: none; opacity: 0;
+            background: var(--surface-solid); box-shadow: 0 0 0 1px var(--hairline);
         }
         .sidebar-foot { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 10px; }
         .avatar { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-size: 13px; font-weight: 600; color: #fff; flex-shrink: 0; font-family: 'Inter', sans-serif; }
-        .sidebar-foot .avatar { background: linear-gradient(180deg, #ecd4a6, #d6ae6c); color: #3d2c0f; }
+        .sidebar-foot .avatar { background: var(--accent-tint); color: var(--accent-ink); }
         .sidebar-foot p { font-size: 13px; font-weight: 500; line-height: 1.3; }
         .sidebar-foot small { display: block; font-size: 12px; color: var(--ink-2); }
 
@@ -142,19 +130,20 @@
             background: transparent; border-bottom: 0.5px solid transparent;
             transition: background-color 200ms var(--ease), border-color 200ms var(--ease);
         }
-        .toolbar.is-scrolled { background: var(--bar); border-bottom-color: var(--hairline); -webkit-backdrop-filter: blur(24px) saturate(180%); backdrop-filter: blur(24px) saturate(180%); }
-        #page-title { font-size: 15px; font-weight: 600; letter-spacing: -0.015em; opacity: 0; transform: translateY(4px); transition: opacity 200ms var(--ease), transform 250ms var(--ease); }
+        .toolbar.is-scrolled { background: var(--bar); border-bottom-color: var(--hairline); }
+        #page-title { font-size: 15px; font-weight: 600; opacity: 0; transform: translateY(4px); transition: opacity 200ms var(--ease), transform 250ms var(--ease); }
         .toolbar.is-scrolled #page-title { opacity: 1; transform: none; }
 
         .page { max-width: 960px; margin: 0 auto; padding: 0 40px 64px; }
+        .page:has(#view-results.active) { max-width: 1240px; } /* room for transcript + insights side by side */
         .view-section { display: none; }
         .view-section.active { display: block; }
-        .large-title { font-size: 34px; line-height: 1.12; font-weight: 700; letter-spacing: -0.026em; }
+        .large-title { font-size: 34px; line-height: 1.12; font-weight: 700; }
         .page-sub { color: var(--ink-2); margin-top: 6px; font-size: 15px; max-width: 60ch; }
         .page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 28px; }
         .head-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
         .section-head { display: flex; align-items: baseline; justify-content: space-between; margin: 36px 0 12px; }
-        .section-title { font-size: 20px; font-weight: 600; letter-spacing: -0.018em; }
+        .section-title { font-size: 20px; font-weight: 600; }
 
         /* ---------- Buttons ---------- */
         .btn {
@@ -164,38 +153,36 @@
         }
         .btn svg { width: 16px; height: 16px; }
         .btn:active { transform: scale(0.96); }
-        .btn-primary { background: var(--accent); color: #fff; box-shadow: 0 1px 2px rgba(0,0,0,0.12), inset 0 0.5px 0 rgba(255,255,255,0.25); }
-        /* Glow on hover: a soft teal halo, not just a press effect. */
-        .btn-primary:hover { background: var(--accent-hover); transform: translateY(-1px); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 16%, transparent), 0 8px 26px -4px var(--glow), inset 0 0.5px 0 rgba(255,255,255,0.25); }
+        .btn-primary { background: var(--accent); color: #fff; }
+        .btn-primary:hover { background: var(--accent-hover); }
         .btn-primary:active { transform: scale(0.96); }
-        .btn-secondary { background: var(--surface-solid); color: var(--ink); box-shadow: 0 0 0 0.5px var(--hairline), 0 1px 2px rgba(0,0,0,0.06); }
-        .btn-secondary:hover { box-shadow: 0 0 0 0.5px var(--hairline), 0 0 0 4px var(--accent-tint), 0 6px 18px -6px var(--glow); color: var(--accent-ink); }
+        .btn-secondary { background: var(--surface-solid); color: var(--ink); box-shadow: 0 0 0 1px var(--hairline); }
+        .btn-secondary:hover { color: var(--accent-ink); background: var(--accent-tint); }
         .btn-quiet { color: var(--accent-ink); height: 28px; padding: 0 10px; font-size: 13px; }
         .btn-quiet:hover { background: var(--accent-tint); }
         .btn-lg { height: 44px; padding: 0 26px; font-size: 15px; font-weight: 600; }
         .btn:disabled, .btn:disabled:hover { opacity: 0.4; cursor: not-allowed; box-shadow: none; transform: none; background: var(--accent); }
-        .icon-btn { width: 32px; height: 32px; padding: 0; border-radius: 50%; color: var(--ink-2); }
+        .icon-btn { position: relative; width: 32px; height: 32px; padding: 0; border-radius: 50%; color: var(--ink-2); }
+        .icon-btn::after { content: ""; position: absolute; inset: -4px; } /* 40px hit area */
         .icon-btn:hover { background: var(--fill); color: var(--ink); }
         .icon-btn svg { width: 18px; height: 18px; }
 
         /* ---------- Groups (inset lists) ---------- */
-        .group { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow-group); overflow: hidden;
-                 -webkit-backdrop-filter: blur(20px) saturate(160%); backdrop-filter: blur(20px) saturate(160%); }
+        .group { background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow-group); overflow: hidden; }
         .group + .group { margin-top: 20px; }
         .group-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; padding: 10px 14px 10px 20px; border-bottom: 0.5px solid var(--hairline); }
-        .group-head h3 { font-size: 15px; font-weight: 600; letter-spacing: -0.012em; }
+        .group-head h3 { font-size: 15px; font-weight: 600; }
         .row { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 52px; padding: 10px 14px 10px 20px; }
         .row + .row { border-top: 0.5px solid var(--hairline); }
         .row-label { font-weight: 500; }
         .row-value { color: var(--ink-2); text-align: right; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .footnote.flush { padding-left: 0; }
         .footnote { font-size: 13px; color: var(--ink-2); padding: 8px 20px 0; max-width: 70ch; }
 
         /* Meeting rows (dashboard + history) */
         .meeting { width: 100%; text-align: left; display: flex; align-items: center; gap: 14px; min-height: 62px; padding: 10px 16px 10px 18px; transition: background-color 150ms var(--ease); }
         .meeting + .meeting { border-top: 0.5px solid var(--hairline); }
         .meeting:hover { background: var(--accent-tint); }
-        .meeting-icon { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--accent-tint); color: var(--accent-ink); flex-shrink: 0; }
-        .meeting-icon svg { width: 18px; height: 18px; }
         .meeting-main { min-width: 0; flex: 1; }
         .meeting-name { font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         .meeting-meta { font-size: 13px; color: var(--ink-2); }
@@ -203,15 +190,14 @@
 
         .stats { display: grid; grid-template-columns: repeat(3, 1fr); }
         .stat { padding: 18px 20px 20px; }
-        .stat + .stat { border-left: 0.5px solid var(--hairline); }
+        
         .stat-label { display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500; color: var(--ink-2); }
-        .stat-label svg { width: 15px; height: 15px; }
-        .stat-value { font-size: 30px; font-weight: 600; letter-spacing: -0.03em; margin-top: 6px; }
+        .stat-value { font-size: 30px; font-weight: 600; margin-top: 6px; }
 
         .empty { text-align: center; padding: 48px 24px 52px; display: flex; flex-direction: column; align-items: center; }
         .empty-icon { color: var(--ink-3); margin-bottom: 14px; }
         .empty-icon svg { width: 40px; height: 40px; stroke-width: 1.25; }
-        .empty h3 { font-size: 17px; font-weight: 600; letter-spacing: -0.015em; }
+        .empty h3 { font-size: 17px; font-weight: 600; }
         .empty p { color: var(--ink-2); max-width: 400px; margin-top: 6px; }
         .empty .btn { margin-top: 20px; }
 
@@ -226,7 +212,7 @@
         #audio { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; z-index: 2; }
         #drop-zone:has(#audio:focus-visible) { outline: 3px solid color-mix(in srgb, var(--accent) 45%, transparent); outline-offset: 2px; }
         #upload-prompt { pointer-events: none; display: flex; flex-direction: column; align-items: center; }
-        #upload-prompt h3 { font-size: 17px; font-weight: 600; letter-spacing: -0.015em; margin-top: 18px; }
+        #upload-prompt h3 { font-size: 17px; font-weight: 600; margin-top: 18px; }
         #upload-prompt p { color: var(--ink-2); font-size: 14px; margin-top: 4px; }
         #upload-prompt .choose { color: var(--accent-ink); font-weight: 500; }
 
@@ -246,7 +232,7 @@
         .stepper { display: inline-flex; align-items: center; background: var(--fill); border-radius: 9px; padding: 2px; flex-shrink: 0; }
         .stepper button { width: 36px; height: 30px; border-radius: 7px; display: grid; place-items: center; color: var(--ink); transition: background-color 150ms var(--ease), box-shadow 150ms var(--ease), transform 150ms var(--ease); }
         .stepper button:hover:not(:disabled) { background: var(--surface-solid); box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
-        .stepper button:active:not(:disabled) { transform: scale(0.92); }
+        .stepper button:active:not(:disabled) { transform: scale(0.96); }
         .stepper button:disabled { opacity: 0.35; cursor: default; }
         .stepper button svg { width: 16px; height: 16px; }
         .actions-end { display: flex; justify-content: flex-end; align-items: center; gap: 14px; margin-top: 24px; }
@@ -282,7 +268,7 @@
 
         /* ---------- Loading ---------- */
         .loading-wrap { max-width: 520px; margin: 24px auto 0; text-align: center; }
-        .loading-wrap h2 { font-size: 28px; font-weight: 700; letter-spacing: -0.024em; margin-top: 28px; }
+        .loading-wrap h2 { font-size: 28px; font-weight: 700; margin-top: 28px; }
         #loading-file { color: var(--ink-2); margin-top: 4px; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         #loading-status { color: var(--ink-2); margin-top: 2px; min-height: 22px; }
         .steps { margin-top: 28px; text-align: left; }
@@ -311,7 +297,7 @@
         .transcript-body { min-width: 0; flex: 1; }
         .transcript-meta { display: flex; align-items: baseline; gap: 10px; }
         .speaker-badge { font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 600; }
-        .transcript-time { font-family: 'Inter', sans-serif; font-size: 12px; color: var(--ink-3); }
+        .transcript-time { font-family: 'Inter', sans-serif; font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
         .transcript-text { font-size: 17px; line-height: 1.8; margin-top: 2px; }
         mark { background: color-mix(in srgb, var(--sand) 60%, transparent); color: inherit; border-radius: 3px; padding: 0 2px; }
         .no-matches { padding: 28px; text-align: center; color: var(--ink-2); display: none; }
@@ -325,16 +311,18 @@
         .form-row .field { flex: 1 1 160px; }
         .check { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; color: var(--ink-2); }
         .check input { width: 16px; height: 16px; accent-color: var(--accent); }
-        .admin-row { flex-wrap: wrap; }
-        .user-main { min-width: 0; flex: 1 1 220px; }
-        .user-name { font-weight: 500; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .admin-row { flex-direction: column; align-items: stretch; gap: 10px; padding-top: 14px; padding-bottom: 14px; }
+        .user-main { min-width: 0; }
+        .user-name { font-weight: 600; font-size: 16px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
         .user-meta { font-size: 13px; color: var(--ink-2); }
-        .user-actions { display: flex; flex-wrap: wrap; gap: 2px; }
+        .user-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+        .assign-label { font-size: 13px; color: var(--ink-2); }
+        .user-actions .btn-danger-edge { margin-left: auto; }
         .btn-danger { color: var(--danger); }
         .btn-danger:hover { background: color-mix(in srgb, var(--danger) 12%, transparent); }
-        .pill { font-size: 12px; font-weight: 500; padding: 1px 8px; border-radius: 999px; background: var(--accent-tint); color: var(--accent-ink); }
-        .pill-warn { background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger); }
-        .pill-off { background: var(--fill); color: var(--ink-2); }
+        .pill { font-size: 13px; font-weight: 500; margin-left: 8px; color: var(--ink-2); }
+        .pill-warn { color: var(--danger); }
+        .pill-off { color: var(--ink-2); }
         .audit-row { display: grid; grid-template-columns: 150px 120px 1fr; gap: 12px; padding: 10px 20px; font-size: 13px; }
         .audit-row + .audit-row { border-top: 0.5px solid var(--hairline); }
         .audit-row .when { color: var(--ink-2); }
@@ -349,6 +337,86 @@
         .form-error { color: var(--danger); font-size: 13px; padding: 0 20px 12px; }
         .form-error:empty { display: none; }
 
+        /* ---------- Report layout: the transcript is the product ---------- */
+        .report-grid { display: grid; gap: 0; }
+        .report-main { margin-top: 20px; } /* the stacked layout: space between the insights and the transcript */
+        .export-group { display: inline-flex; gap: 8px; }
+        .export-group.with-divider { margin-left: 16px; }
+        .icon-btn[aria-busy=true] svg { animation: spin 0.9s linear infinite; }
+        .icon-btn[aria-busy=true] { opacity: 0.6; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .icon-btn.icon-danger:hover, .meeting-wrap .icon-btn.btn-danger:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, transparent); }
+        .meeting-wrap .icon-btn.btn-danger { color: var(--ink-3); }
+        .icon-btn-spacer { width: 32px; margin-right: 12px; flex-shrink: 0; }
+        .head-inline { display: inline-flex; gap: 4px; }
+        .action-meta span { display: inline-flex; gap: 6px; }
+                /* Every account action is a bordered button, so it reads as clickable. */
+        .user-actions .btn-quiet { height: 32px; padding: 0 14px; border-radius: 8px; font-size: 14px; color: var(--ink); box-shadow: inset 0 0 0 1px var(--hairline); }
+        .user-actions .btn-quiet:hover { background: var(--fill); }
+        .user-actions .btn-danger:hover { color: var(--danger); box-shadow: inset 0 0 0 1px var(--danger); background: transparent; }
+        .action-meta b { font-weight: 500; color: var(--ink-3); }
+        .action-meta [dir=auto] { font-family: 'Cairo', 'Inter', sans-serif; font-size: 14px; }
+        @media (min-width: 1180px) {
+            .report-grid { grid-template-columns: minmax(0, 1.6fr) minmax(320px, 1fr); gap: 0 20px; align-items: start; }
+            .report-main { order: -1; margin-top: 0; }
+            #transcript { max-height: none; }
+        }
+        /* ---------- Accordions: a header row with a chevron, so it reads as clickable ---------- */
+        .fold { margin: 12px 0 0; }
+        .fold summary {
+            display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; list-style: none;
+            font-size: 14px; font-weight: 500; color: var(--ink); padding: 10px 12px; margin: 0 -12px; border-radius: 8px;
+            transition: background-color 150ms var(--ease);
+        }
+        .fold summary::-webkit-details-marker { display: none; }
+        .fold summary::after {
+            content: ""; flex-shrink: 0; width: 8px; height: 8px; margin-right: 4px;
+            border-right: 2px solid var(--ink); border-bottom: 2px solid var(--ink);
+            transform: translateY(-2px) rotate(45deg); transition: transform 200ms var(--ease);
+        }
+        .fold[open] summary::after { transform: translateY(2px) rotate(-135deg); }
+        .fold summary:hover { background: var(--fill); }
+        .fold summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 0; }
+        .fold p { font-size: 14px; color: var(--ink-2); padding: 4px 0 0; max-width: 60ch; }
+        .fold-section { margin-top: 20px; }
+        .fold-section summary { font-size: 20px; font-weight: 600; padding: 8px 12px; }
+        .fold-section .group { margin-top: 8px; }
+        /* ---------- Quick search (Ctrl/Cmd+K) ---------- */
+        .search-trigger { display: flex; align-items: center; gap: 8px; width: 100%; height: 34px; padding: 0 10px; margin-bottom: 12px; border-radius: 8px; background: var(--fill); color: var(--ink-2); font-size: 14px; }
+        .search-trigger svg { width: 16px; height: 16px; }
+        .search-trigger kbd { margin-left: auto; font: inherit; font-size: 12px; }
+        #palette { padding: 0; width: min(520px, calc(100vw - 32px)); margin-top: 12vh; overflow: hidden; }
+        #palette input { width: 100%; height: 48px; border: 0; border-bottom: 1px solid var(--hairline); background: transparent; padding: 0 16px; font-size: 16px; outline: none; }
+        #palette ul { list-style: none; margin: 0; padding: 6px; max-height: 340px; overflow-y: auto; }
+        #palette li { display: flex; align-items: baseline; gap: 10px; padding: 9px 10px; border-radius: 8px; cursor: pointer; font-size: 15px; }
+        #palette li small { color: var(--ink-2); font-size: 13px; margin-left: auto; }
+        #palette li[aria-selected=true] { background: var(--fill); }
+        #palette .palette-empty { padding: 14px 16px; color: var(--ink-2); font-size: 14px; }
+        /* ---------- Segmented filters (replace the browser's own dropdown popup) ---------- */
+        .seg-source { display: none; }
+        .seg { display: inline-flex; gap: 2px; padding: 2px; border-radius: 10px; background: var(--fill); }
+        .seg button { height: 32px; padding: 0 12px; border-radius: 8px; font-size: 14px; font-weight: 500; color: var(--ink-2); white-space: nowrap; transition: background-color 150ms var(--ease), color 150ms var(--ease); }
+        .seg button:hover { color: var(--ink); }
+        .seg button[aria-pressed=true] { background: var(--surface-solid); color: var(--ink); }
+        /* Styled dropdown where the browser supports it (Chromium 135+); older browsers keep their own. */
+        @supports (appearance: base-select) {
+            select { appearance: base-select; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+            select::picker-icon {
+                content: ""; width: 7px; height: 7px; margin-right: 2px;
+                border-right: 2px solid var(--ink-2); border-bottom: 2px solid var(--ink-2);
+                transform: translateY(-2px) rotate(45deg); transition: transform 150ms var(--ease);
+            }
+            select:open::picker-icon { transform: translateY(2px) rotate(-135deg); }
+            ::picker(select) {
+                appearance: base-select;
+                position-try-fallbacks: none; /* always open downward, never flip above the field */
+                margin-block-start: 6px; padding: 4px; border: 0; border-radius: 10px;
+                background: var(--surface-solid); box-shadow: var(--shadow-float);
+            }
+            select option { display: flex; align-items: center; min-height: 36px; padding: 0 12px; border-radius: 6px; font-size: 14px; }
+            select option:hover, select option:checked { background: var(--fill); }
+            select option::checkmark { display: none; }
+        }
         /* ---------- Roles, history filters, report editing ---------- */
         .meeting-wrap { display: flex; align-items: center; }
         .meeting-wrap + .meeting-wrap { border-top: 0.5px solid var(--hairline); }
@@ -359,7 +427,7 @@
         .filter-bar { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
         .search-wide { flex: 1 1 260px; width: auto; }
         .search-wide input { height: 36px; }
-        select.field { padding-right: 28px; cursor: pointer; }
+        select.field { padding-right: 12px; cursor: pointer; }
         .export-bar { margin: -12px 0 20px; }
         .export-label { font-size: 13px; font-weight: 600; color: var(--ink-2); margin-right: 2px; }
         .area { width: 100%; height: auto; min-height: 110px; padding: 12px; line-height: 1.8; font-size: 16px; resize: vertical; }
@@ -368,7 +436,7 @@
         .insight-list { list-style: none; margin: 0; padding: 0; }
         .insight-list li, .action-row { padding: 12px 24px; font-size: 16px; line-height: 1.7; }
         .insight-list li + li, .action-row + .action-row { border-top: 0.5px solid var(--hairline); }
-        .action-meta { display: flex; gap: 14px; flex-wrap: wrap; font-family: 'Inter', sans-serif; font-size: 13px; color: var(--ink-2); }
+        .action-meta { display: flex; gap: 14px; flex-wrap: wrap; font-family: 'Inter', sans-serif; font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
         .insight-empty { padding: 16px 24px; color: var(--ink-2); font-size: 14px; }
         .speaker-badge { cursor: default; }
         button.speaker-badge { cursor: pointer; border-radius: 6px; padding: 0 4px; margin: 0 -4px; }
@@ -380,16 +448,16 @@
         .team-block + .team-block { border-top: 0.5px solid var(--hairline); }
         .team-block h4 { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
         .team-members { margin-top: 4px; font-size: 14px; color: var(--ink-2); }
-        .assign { height: 28px; font-size: 13px; padding: 0 24px 0 10px; }
+        .assign { height: 32px; font-size: 13px; padding: 0 10px; }
         .btn-danger.btn-secondary { color: var(--danger); }
         @media print {
-            .sidebar, .toolbar, .head-actions, .export-bar, .search, .editor-actions, .card-edit, #toast, dialog { display: none !important; }
+            .sidebar, .toolbar, .head-actions, .export-group, .search, .editor-actions, .card-edit, #toast, dialog { display: none !important; }
             .app { display: block; }
             .main { overflow: visible; height: auto; }
             .view-section { display: none !important; }
             #view-results { display: block !important; }
             #transcript { max-height: none; overflow: visible; }
-            .group { box-shadow: none; border: 0.5px solid #bbb; break-inside: avoid-page; backdrop-filter: none; }
+            .group { box-shadow: none; border: 0.5px solid #bbb; break-inside: avoid-page;  }
         }
 
         /* ---------- Toast (HUD) ---------- */
@@ -397,7 +465,6 @@
             position: fixed; top: 16px; left: 50%; z-index: 50; transform: translate(-50%, -160%);
             display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 14px; min-height: 44px; border-radius: 999px;
             background: var(--glass); box-shadow: var(--glass-shadow);
-            -webkit-backdrop-filter: blur(30px) saturate(190%); backdrop-filter: blur(30px) saturate(190%);
             font-size: 14px; font-weight: 500; max-width: calc(100vw - 32px);
         }
         #toast > svg { width: 18px; height: 18px; }
@@ -414,7 +481,7 @@
                 position: fixed; left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom)); margin: 0;
                 flex-direction: row; padding: 6px; border-radius: 26px;
             }
-            .brand, .sidebar-foot, .nav-group-label, #nav-indicator, .nav-status { display: none !important; }
+            .brand, .sidebar-foot, .nav-group-label, .search-trigger, #nav-indicator, .nav-status { display: none !important; }
             .nav { flex-direction: row; width: 100%; justify-content: space-around; }
             .nav-btn { flex-direction: column; gap: 2px; height: 52px; padding: 0 4px; font-size: 11px; flex: 1; justify-content: center; border-radius: 20px; }
             .nav-btn.is-active { background: var(--accent-tint); }
@@ -424,9 +491,11 @@
             .toolbar { padding: 0 16px; }
             .page { padding: 0 16px 40px; }
             .large-title { font-size: 28px; }
-            .stats, .stats-4 { grid-template-columns: 1fr; }
+            .export-group, .export-group.with-divider { margin: 4px 0 0; padding: 0; border-left: 0; width: 100%; }
+            .stats-4 { grid-template-columns: repeat(2, 1fr); }
+            .stat { padding: 14px 14px 16px; }
+            .stat-value { font-size: 24px; }
             .audit-row { grid-template-columns: 1fr; gap: 2px; }
-            .stat + .stat { border-left: 0; border-top: 0.5px solid var(--hairline); }
             .search { width: 100%; }
             .group-head { flex-wrap: wrap; }
             #toast { top: 10px; }
@@ -446,6 +515,10 @@
             <span>Majlis</span>
         </div>
 
+        <button type="button" class="search-trigger" onclick="openPalette()" aria-label="Quick search">
+            <i data-lucide="search"></i>Search<kbd id="palette-key">Ctrl K</kbd>
+        </button>
+
         <nav id="side-nav" class="nav" aria-label="Main">
             <span id="nav-indicator" aria-hidden="true"></span>
             {% if g.user.role_id == 1 %}
@@ -462,11 +535,10 @@
                 <span class="nav-status" id="nav-analyze-status"></span>
             </button>
             <button onclick="switchView('history')" id="nav-history" class="nav-btn">
-                <i data-lucide="clock-3"></i><span>{{ 'History & Team' if g.user.role_id == 2 else 'History' }}</span>
+                <i data-lucide="clock-3"></i><span>History</span>
             </button>
             {% endif %}
-            <p class="nav-group-label">Workspace</p>
-            <button onclick="switchView('settings')" id="nav-settings" class="nav-btn">
+                        <button onclick="switchView('settings')" id="nav-settings" class="nav-btn">
                 <i data-lucide="settings-2"></i><span>Settings</span>
             </button>
         </nav>
@@ -495,21 +567,24 @@
                 <div class="page-head">
                     <div>
                         <h2 class="large-title">Dashboard</h2>
-                        <p class="page-sub">Your analyzed meetings at a glance.</p>
+                        <p class="page-sub" id="dashboard-sub">Your analyzed meetings at a glance.</p>
+                    </div>
+                    <div class="head-actions">
+                        <button type="button" class="btn btn-primary btn-lg" onclick="switchView('analyze')"><i data-lucide="audio-lines"></i>New analysis</button>
                     </div>
                 </div>
 
                 <div class="group stats">
                     <div class="stat">
-                        <p class="stat-label"><i data-lucide="file-audio-2"></i>Meetings analyzed</p>
+                        <p class="stat-label">Meetings analyzed</p>
                         <p class="stat-value num" id="stat-meetings">0</p>
                     </div>
                     <div class="stat">
-                        <p class="stat-label"><i data-lucide="timer"></i>Hours processed</p>
-                        <p class="stat-value num" id="stat-hours">0.0h</p>
+                        <p class="stat-label">Time processed</p>
+                        <p class="stat-value num" id="stat-hours">0 min</p>
                     </div>
                     <div class="stat">
-                        <p class="stat-label"><i data-lucide="users-round"></i>Speakers detected</p>
+                        <p class="stat-label">Speakers identified</p>
                         <p class="stat-value num" id="stat-speakers">0</p>
                     </div>
                 </div>
@@ -526,7 +601,7 @@
                 <div class="page-head">
                     <div>
                         <h2 class="large-title">New Analysis</h2>
-                        <p class="page-sub">Record a short voice sample of each speaker, then upload the meeting. Majlis transcribes it, labels every line with the right name and writes a summary. You can keep using the app while it works.</p>
+                        <p class="page-sub">Add the recording and a voice sample for each speaker</p>
                     </div>
                 </div>
 
@@ -556,7 +631,9 @@
                     </div>
                     <div id="speaker-list"></div>
                 </div>
-                <p class="footnote">Each person reads aloud for about 20 seconds so Majlis can recognise their voice in the meeting. Record one person at a time, close to the mic, in a quiet room. Voice samples stay in this tab and are only sent with the analysis.</p>
+                <details class="fold"><summary>How voice samples work</summary>
+                    <p>Each person reads aloud for about 20 seconds so Majlis can recognise their voice. Record one person at a time, close to the mic. Samples stay in this tab and are only sent with the analysis.</p>
+                </details>
 
                 <div class="actions-end">
                     <p id="analyze-hint" aria-live="polite"></p>
@@ -594,23 +671,26 @@
                         <p class="page-sub" id="report-meta"></p>
                     </div>
                     <div class="head-actions">
-                        <button type="button" class="btn btn-secondary" data-owner onclick="renameMeeting()"><i data-lucide="pencil"></i>Rename</button>
-                        <button type="button" class="btn btn-secondary" data-owner id="btn-regenerate" onclick="regenerateReport()"><i data-lucide="refresh-cw"></i>Regenerate</button>
-                        <button type="button" class="btn btn-secondary btn-danger" data-owner onclick="deleteMeeting()"><i data-lucide="trash-2"></i>Delete</button>
+                        <button type="button" class="btn icon-btn" data-owner onclick="renameMeeting()" title="Rename" aria-label="Rename meeting"><i data-lucide="pencil"></i></button>
+                        <button type="button" class="btn icon-btn" data-owner id="btn-regenerate" onclick="regenerateReport()" title="Regenerate summary, decisions and action items" aria-label="Regenerate"><i data-lucide="refresh-cw"></i></button>
+                        <button type="button" class="btn icon-btn icon-danger" data-owner onclick="deleteMeeting()" title="Delete meeting" aria-label="Delete meeting"><i data-lucide="trash-2"></i></button>
+                        <div class="export-group" role="group" aria-label="Export report">
+                            <button type="button" class="btn btn-primary" onclick="exportReport('pdf')"><i data-lucide="download"></i>Export PDF</button>
+                            <button type="button" class="btn btn-secondary" onclick="exportReport('docx')">DOCX</button>
+                            <button type="button" class="btn btn-secondary" onclick="exportReport('json')">JSON</button>
+                        </div>
                     </div>
                 </div>
-                <div class="head-actions export-bar" role="group" aria-label="Export report">
-                    <span class="export-label">Export</span>
-                    <button type="button" class="btn btn-secondary" onclick="exportReport('pdf')"><i data-lucide="file-text"></i>PDF</button>
-                    <button type="button" class="btn btn-secondary" onclick="exportReport('docx')"><i data-lucide="file-type"></i>DOCX</button>
-                    <button type="button" class="btn btn-secondary" onclick="exportReport('json')"><i data-lucide="braces"></i>JSON</button>
-                    <button type="button" class="btn btn-quiet" onclick="copyText('summary')"><i data-lucide="copy"></i>Copy summary</button>
-                </div>
 
+                <div class="report-grid">
+                <div class="report-side">
                 <div class="group">
                     <div class="group-head">
                         <h3>Executive summary</h3>
-                        <button type="button" class="btn btn-quiet" data-owner id="btn-edit-summary" onclick="editSummary()">Edit</button>
+                        <span class="head-inline">
+                            <button type="button" class="btn btn-quiet" onclick="copyText('summary')"><i data-lucide="copy"></i>Copy</button>
+                            <button type="button" class="btn btn-quiet" data-owner id="btn-edit-summary" onclick="editSummary()">Edit</button>
+                        </span>
                     </div>
                     <div id="summary" class="arabic" dir="auto"></div>
                     <div id="summary-editor" hidden>
@@ -632,6 +712,9 @@
                     <div id="action-items" class="arabic" dir="auto"></div>
                 </div>
 
+                </div>
+
+                <div class="report-main">
                 <div class="group">
                     <div class="group-head">
                         <h3>Transcript</h3>
@@ -643,6 +726,8 @@
                     <div id="transcript" class="arabic" dir="auto"></div>
                     <p class="no-matches" id="no-matches">No lines match your search.</p>
                 </div>
+                </div>
+                </div>
             </section>
 
             <!-- HISTORY -->
@@ -650,10 +735,10 @@
                 <div class="page-head">
                     <div>
                         <h2 class="large-title">{{ 'History & Team' if g.user.role_id == 2 else 'History' }}</h2>
-                        <p class="page-sub">{{ "Your meetings and your team members' meetings." if g.user.role_id == 2 else 'Your reports are saved to your account.' }}</p>
+                        <p class="page-sub">{{ "Your meetings and your team's" if g.user.role_id == 2 else 'Past meetings' }}</p>
                     </div>
                     <div class="head-actions">
-                        <button class="btn btn-secondary btn-danger" id="clear-history" onclick="clearHistory()" hidden><i data-lucide="trash-2"></i>Clear my history</button>
+                        <button class="btn btn-quiet btn-danger" id="clear-history" onclick="clearHistory()" hidden><i data-lucide="trash-2"></i>Clear my history</button>
                     </div>
                 </div>
                 <div class="filter-bar">
@@ -662,17 +747,17 @@
                         <input type="search" id="history-search" oninput="renderHistory()" placeholder="Search title, summary or person" aria-label="Search meetings">
                     </div>
                     {% if g.user.role_id == 2 %}
-                    <select class="field" id="history-scope" onchange="renderHistory()" aria-label="Whose meetings">
-                        <option value="all">Mine and my team's</option>
-                        <option value="mine">Only mine</option>
-                        <option value="team">Only my team's</option>
+                    <select class="field seg-source" id="history-scope" onchange="renderHistory()" aria-label="Whose meetings">
+                        <option value="all">All</option>
+                        <option value="mine">Mine</option>
+                        <option value="team">Team</option>
                     </select>
                     {% endif %}
-                    <select class="field" id="history-range" onchange="renderHistory()" aria-label="Date range">
-                        <option value="0">Any date</option>
-                        <option value="7">Last 7 days</option>
-                        <option value="30">Last 30 days</option>
-                        <option value="365">Last year</option>
+                    <select class="field seg-source" id="history-range" onchange="renderHistory()" aria-label="Date range">
+                        <option value="0">Any time</option>
+                        <option value="7">7 days</option>
+                        <option value="30">30 days</option>
+                        <option value="365">Year</option>
                     </select>
                 </div>
                 <div class="group" id="history-list"></div>
@@ -684,15 +769,15 @@
                 <div class="page-head">
                     <div>
                         <h2 class="large-title">Admin</h2>
-                        <p class="page-sub">Create accounts, manage roles, build executive teams and review security activity. Meeting content is private to its owner and their Executive.</p>
+                        <p class="page-sub">Accounts, roles and teams</p>
                     </div>
                 </div>
 
                 <div class="group stats stats-4">
-                    <div class="stat"><p class="stat-label"><i data-lucide="users-round"></i>Users</p><p class="stat-value num" id="adm-users">0</p></div>
-                    <div class="stat"><p class="stat-label"><i data-lucide="briefcase"></i>Executives</p><p class="stat-value num" id="adm-executives">0</p></div>
-                    <div class="stat"><p class="stat-label"><i data-lucide="file-audio-2"></i>Meetings</p><p class="stat-value num" id="adm-meetings">0</p></div>
-                    <div class="stat"><p class="stat-label"><i data-lucide="timer"></i>Hours processed</p><p class="stat-value num" id="adm-hours">0.0h</p></div>
+                    <div class="stat"><p class="stat-label">Users</p><p class="stat-value num" id="adm-users">0</p></div>
+                    <div class="stat"><p class="stat-label">Executives</p><p class="stat-value num" id="adm-executives">0</p></div>
+                    <div class="stat"><p class="stat-label">Meetings</p><p class="stat-value num" id="adm-meetings">0</p></div>
+                    <div class="stat"><p class="stat-label">Time processed</p><p class="stat-value num" id="adm-hours">0 min</p></div>
                 </div>
 
                 <div class="section-head"><h3 class="section-title">Create an account</h3></div>
@@ -718,17 +803,19 @@
 
                 <div class="section-head"><h3 class="section-title">Accounts</h3></div>
                 <div class="group" id="admin-users"></div>
+                <p class="footnote flush">Accounts lock for 15 minutes after 5 wrong passwords. Deleting a user deletes their meetings.</p>
 
-                <div class="section-head"><h3 class="section-title">Recent activity</h3></div>
+                <details class="fold fold-section"><summary>Recent activity</summary>
                 <div class="group" id="admin-audit"></div>
+                </details>
 
-                <div class="section-head"><h3 class="section-title">Database</h3></div>
+                <details class="fold fold-section"><summary>Database</summary>
                 <div class="group">
                     <div class="row"><span class="row-label">Engine</span><span class="row-value" id="adm-db-version"></span></div>
                     <div class="row"><span class="row-label">Size</span><span class="row-value" id="adm-db-size"></span></div>
                     <div class="row"><span class="row-label">Speaker turns stored</span><span class="row-value num" id="adm-utterances">0</span></div>
                 </div>
-                <p class="footnote">Accounts lock for 15 minutes after 5 wrong passwords. Deleting a user also deletes their meetings.</p>
+                </details>
             </section>
             {% endif %}
 
@@ -740,7 +827,7 @@
                 <div class="group">
                     <div class="row">
                         <span class="row-label">Default language</span>
-                        <span class="row-value">Egyptian Arabic (ar-EG)</span>
+                        <span class="row-value">Arabic (ar)</span>
                     </div>
                     <div class="row">
                         <span class="row-label">Transcription model</span>
@@ -769,7 +856,7 @@
         <input class="field" id="pw-input" type="password" minlength="10" required placeholder="New password (10+ characters)" aria-label="New password" autocomplete="new-password">
         <menu>
             <button class="btn btn-secondary" type="button" id="pw-cancel">Cancel</button>
-            <button class="btn btn-primary" type="submit">Reset password</button>
+            <button class="btn btn-primary" type="submit" id="pw-submit">Reset password</button>
         </menu>
     </form>
 </dialog>
@@ -780,6 +867,10 @@
     <button class="btn btn-primary" id="toast-action" onclick="openLatestReport()">View report</button>
 </div>
 
+<dialog id="palette" aria-label="Quick search">
+    <input id="palette-input" type="text" placeholder="Go to a page or find a meeting" autocomplete="off" aria-label="Search">
+    <ul id="palette-list" role="listbox"></ul>
+</dialog>
 <script src="/script.js"></script>
 </body>
 </html>
