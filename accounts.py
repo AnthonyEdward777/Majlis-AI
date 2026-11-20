@@ -210,7 +210,9 @@ def _store_insights(conn, meeting_id, decisions, action_items):
 
 READABLE = (
     "SELECT m.*, u.username AS owner,"
-    " (SELECT count(*) FROM speakers s WHERE s.meeting_id = m.id AND s.speaker_label <> 'UNKNOWN') AS speaker_count"
+    " (SELECT count(*) FROM speakers s WHERE s.meeting_id = m.id AND s.speaker_label <> 'UNKNOWN') AS speaker_count,"
+    " (SELECT coalesce(array_agg(s.speaker_label ORDER BY s.id), '{}') FROM speakers s"
+    "  WHERE s.meeting_id = m.id AND s.speaker_label <> 'UNKNOWN') AS speaker_names"
     " FROM meetings m JOIN users u ON u.id = m.user_id"
     " WHERE (m.user_id = %(me)s OR (%(exec)s AND u.executive_id = %(me)s))"
 )
@@ -229,6 +231,7 @@ def _meeting_json(row):
         "summary": row["summary"],
         "duration": row["duration_sec"],
         "speakers": row["speaker_count"],
+        "speakerNames": row["speaker_names"],
         "alignmentError": bool(row["alignment_error"]),
         "owner": row["owner"],
         "mine": row["user_id"] == g.user["id"],
