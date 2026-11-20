@@ -138,8 +138,8 @@ function switchView(viewId) {
 
     if (animate && changed) {
         gsap.fromTo(target.querySelectorAll(':scope > *, .loading-wrap > *'),
-            { autoAlpha: 0, y: 12 },
-            { autoAlpha: 1, y: 0, duration: 0.55, stagger: 0.05, overwrite: true, clearProps: 'transform,visibility' });
+            { autoAlpha: 0, y: 6 },
+            { autoAlpha: 1, y: 0, duration: 0.22, stagger: 0.02, ease: 'power2.out', overwrite: true, clearProps: 'transform,visibility' });
     }
 }
 
@@ -194,7 +194,6 @@ function meetingRow(r, deletable) {
     row.className = 'meeting';
     row.onclick = () => openReport(r.id, true);
     row.innerHTML = `
-        <span class="meeting-icon"><i data-lucide="file-audio-2"></i></span>
         <span class="meeting-main">
             <span class="meeting-name" style="display:block"></span>
             <span class="meeting-meta num" style="display:block"></span>
@@ -218,8 +217,16 @@ function meetingRow(r, deletable) {
         del.innerHTML = '<i data-lucide="trash-2"></i>';
         del.onclick = () => deleteReportRow(r);
         wrap.appendChild(del);
+    } else if (deletable) {
+        // Keep the chevrons of read-only team rows aligned with rows that have a delete button.
+        wrap.appendChild(el('span', 'icon-btn-spacer'));
     }
     return wrap;
+}
+
+function formatTotalTime(seconds) {
+    if (seconds < 60) return `${Math.round(seconds)} sec`;
+    return seconds < 3600 ? `${Math.round(seconds / 60)} min` : `${(seconds / 3600).toFixed(1)}h`;
 }
 
 function emptyState(icon, title, text, withButton) {
@@ -240,10 +247,15 @@ function emptyState(icon, title, text, withButton) {
 
 function renderDashboard() {
     const reports = loadReports().filter(r => r.mine !== false);
-    const hours = reports.reduce((sum, r) => sum + (r.duration || 0), 0) / 3600;
+    const seconds = reports.reduce((sum, r) => sum + (r.duration || 0), 0);
     document.getElementById('stat-meetings').textContent = reports.length;
-    document.getElementById('stat-hours').textContent = hours.toFixed(1) + 'h';
-    document.getElementById('stat-speakers').textContent = reports.reduce((sum, r) => sum + (r.speakers || 0), 0);
+    document.getElementById('dashboard-sub').textContent = reports.length
+        ? `${reports.length} meeting${reports.length === 1 ? '' : 's'} analyzed, ${formatTotalTime(seconds)} of audio`
+        : 'Upload a recording to get a transcript, summary and action items';
+    document.getElementById('stat-hours').textContent = formatTotalTime(seconds);
+    // Distinct people, not speaker slots: the same colleague in five meetings counts once.
+    document.getElementById('stat-speakers').textContent =
+        new Set(reports.flatMap(r => (r.speakerNames || []).map(n => n.trim().toLowerCase()))).size;
 
     const list = document.getElementById('recent-list');
     list.replaceChildren();
@@ -262,7 +274,7 @@ function renderHistory() {
         if (scope === 'mine' && r.mine === false) return false;
         if (scope === 'team' && r.mine !== false) return false;
         if (days && Date.now() - r.createdAt > days * 86400000) return false;
-        const haystack = `${r.title} ${r.fileName} ${r.summary} ${r.owner}`.toLowerCase();
+        const haystack = `${r.title} ${r.fileName} ${r.summary} ${r.owner} ${(r.speakerNames || []).join(' ')}`.toLowerCase();
         return query.split(/\s+/).every(term => haystack.includes(term));
     });
     const list = document.getElementById('history-list');
@@ -383,7 +395,7 @@ const speakerList = document.getElementById('speaker-list');
 const analyzeHint = document.getElementById('analyze-hint');
 let speakers = [];        // { id, name, sample: Blob|null, url, duration, busy, el }
 let nextSpeakerId = 1;
-let recorder = null;      // { speaker, mediaRecorder, stream, chunks, startedAt, timer }
+let recorder = null;      // { speaker, capture, stream, startedAt, timer }
 const samplePlayer = new Audio();
 let playingSpeaker = null;
 
@@ -450,14 +462,14 @@ function speakerProblems() {
     const missing = speakers.filter(s => !s.sample).map(s => s.name.trim() || 'every speaker');
     if (!speakers.length) return 'Add at least one speaker.';
     if (names.some(n => !n)) return 'Give every speaker a name.';
-    if (new Set(names.map(n => n.toLowerCase())).size !== names.length) return 'Two speakers have the same name.';
+    if (new Set(names.map(n => n.toLowerCase())).size !== names.length) return 'Two speakers have the same name';
     if (recorder || speakers.some(s => s.busy)) return 'Finish the recording first.';
-    if (missing.length) return `Record a voice sample for ${missing.slice(0, 2).join(' and ')}${missing.length > 2 ? ` and ${missing.length - 2} more` : ''}.`;
+    if (missing.length) return `Record a voice sample for ${missing.slice(0, 2).join(' and ')}${missing.length > 2 ? ` and ${missing.length - 2} more` : ''}`;
     return '';
 }
 
 function updateAnalyzeButton() {
-    const problem = !selectedFile ? 'Choose the meeting recording.' : speakerProblems();
+    const problem = !selectedFile ? 'Choose the meeting recording' : speakerProblems();
     btnAnalyze.disabled = Boolean(problem);
     analyzeHint.textContent = problem;
 }
@@ -504,7 +516,7 @@ async function toggleRecording(s) {
         if (recorder.speaker === s) stopRecording();
         return;
     }
-    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+    if (!navigator.mediaDevices?.getUserMedia || !(window.AudioContext || window.webkitAudioContext)) {
         showToast('This browser cannot record audio. Try a current Chrome, Edge, Firefox or Safari.', true);
         return;
     }
@@ -523,13 +535,10 @@ async function toggleRecording(s) {
         return;
     }
 
-    const mediaRecorder = new MediaRecorder(stream);
-    const chunks = [];
-    mediaRecorder.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
-    const rec = { speaker: s, mediaRecorder, stream, chunks, startedAt: performance.now(), timer: null, cancelled: false };
+    const capture = createPcmCapture(stream);
+    const rec = { speaker: s, capture, stream, startedAt: performance.now(), timer: null, cancelled: false };
     recorder = rec;
-    mediaRecorder.onstop = () => finishRecording(rec);
-    mediaRecorder.start(250);
+    capture.onstop = () => finishRecording(rec);
 
     recorder.timer = setInterval(() => {
         const elapsed = recorderElapsed();
@@ -542,10 +551,10 @@ async function toggleRecording(s) {
 }
 
 function stopRecording() {
-    if (!recorder || recorder.mediaRecorder.state === 'inactive') return;
+    if (!recorder || recorder.capture.state === 'inactive') return;
     recorder.duration = recorderElapsed();
     clearInterval(recorder.timer);
-    recorder.mediaRecorder.stop(); // finishRecording runs from onstop
+    recorder.capture.stop(); // finishRecording runs from onstop
 }
 
 function cancelRecording() {
@@ -570,7 +579,7 @@ async function finishRecording(rec) {
     s.busy = true;
     refreshSpeakers();
     try {
-        const wav = await toWav16k(new Blob(rec.chunks, { type: rec.mediaRecorder.mimeType || 'audio/webm' }));
+        const wav = pcmToWav16k(rec.capture.pcm, rec.capture.sampleRate);
         if (!speakers.includes(s)) return; // removed while processing
         // Check the audio that was actually captured, not the clock.
         if (wav.duration < MIN_ENROLL_SECONDS) {
@@ -590,20 +599,45 @@ async function finishRecording(rec) {
     }
 }
 
-// Decode whatever the browser recorded (WebM/Opus, MP4/AAC…) and resample to 16 kHz mono WAV.
-async function toWav16k(blob) {
-    const Ctx = window.AudioContext || window.webkitAudioContext;
-    const ctx = new Ctx();
-    let decoded;
-    try { decoded = await ctx.decodeAudioData(await blob.arrayBuffer()); } finally { ctx.close(); }
+// Raw PCM capture. No codec is involved (MediaRecorder + decodeAudioData fails in some embedded browsers,
+// e.g. VS Code's), so it works wherever the microphone does.
+// shortcut: ScriptProcessorNode is deprecated but works everywhere; move to AudioWorklet if browsers drop it.
+function createPcmCapture(stream) {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const source = ctx.createMediaStreamSource(stream);
+    const node = ctx.createScriptProcessor(4096, 1, 1);
+    const capture = {
+        state: 'recording', sampleRate: ctx.sampleRate, pcm: [], onstop: null,
+        stop() {
+            if (this.state === 'inactive') return;
+            this.state = 'inactive';
+            source.disconnect(); node.disconnect(); node.onaudioprocess = null;
+            ctx.close();
+            if (this.onstop) this.onstop();
+        }
+    };
+    node.onaudioprocess = e => capture.pcm.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+    source.connect(node);
+    node.connect(ctx.destination); // required for the callback to fire; the output buffer stays silent
+    return capture;
+}
 
-    const offline = new OfflineAudioContext(1, Math.max(1, Math.ceil(decoded.duration * ENROLL_RATE)), ENROLL_RATE);
-    const source = offline.createBufferSource();
-    source.buffer = decoded;
-    source.connect(offline.destination); // channels are mixed down to mono
-    source.start();
-    const rendered = await offline.startRendering();
-    return { blob: encodeWav(rendered.getChannelData(0), ENROLL_RATE), duration: rendered.duration };
+// Mono Float32 chunks at the device rate -> 16 kHz mono WAV (box-filter downsample).
+function pcmToWav16k(chunks, rate) {
+    const total = chunks.reduce((n, c) => n + c.length, 0);
+    if (!total) throw new Error('No audio was captured');
+    const input = new Float32Array(total);
+    let at = 0;
+    chunks.forEach(c => { input.set(c, at); at += c.length; });
+    const ratio = rate / ENROLL_RATE;
+    const out = new Float32Array(Math.floor(total / ratio));
+    for (let i = 0; i < out.length; i++) {
+        const from = Math.floor(i * ratio), to = Math.min(total, Math.max(from + 1, Math.floor((i + 1) * ratio)));
+        let sum = 0;
+        for (let j = from; j < to; j++) sum += input[j];
+        out[i] = sum / (to - from);
+    }
+    return { blob: encodeWav(out, ENROLL_RATE), duration: out.length / ENROLL_RATE };
 }
 
 function encodeWav(samples, rate) {
@@ -839,6 +873,7 @@ function renderReport(report) {
         `${report.fileName}, ${reportMeta(report)}${mine ? '' : `, uploaded by ${report.owner}`}`;
     // Only the owner can correct, regenerate or delete; an Executive reading a team member's meeting is read-only.
     document.querySelectorAll('#view-results [data-owner]').forEach(b => { b.hidden = !mine || report.unsaved; });
+    document.querySelector('.export-group').classList.toggle('with-divider', mine && !report.unsaved);
     document.getElementById('summary-editor').hidden = true;
     document.getElementById('summary').hidden = false;
     setParagraphs(document.getElementById('summary'), report.summary);
@@ -853,9 +888,18 @@ function renderReport(report) {
         ? report.actionItems.map(a => {
             const row = el('div', 'action-row');
             const meta = el('div', 'action-meta');
-            meta.append(el('span', '', `Responsible: ${a.responsiblePerson || 'Not specified'}`),
-                        el('span', '', `Deadline: ${a.deadline || 'Not specified'}`));
-            row.append(el('div', '', a.description), meta);
+            // dir="auto": an Arabic name or deadline must not scramble the English label next to it.
+            const field = (label, value) => {
+                const span = el('span', '');
+                const val = el('span', '', value || 'Not specified');
+                val.dir = 'auto';
+                span.append(el('b', '', label), val);
+                return span;
+            };
+            meta.append(field('Responsible', a.responsiblePerson), field('Deadline', a.deadline));
+            const text = el('div', '', a.description);
+            text.dir = 'auto';
+            row.append(text, meta);
             return row;
         })
         : [el('div', 'insight-empty', 'No action items were found in this meeting.')]));
@@ -924,7 +968,7 @@ function renderReport(report) {
 
     if (animate) {
         gsap.from(Array.from(transcriptDiv.children).slice(0, 10), {
-            autoAlpha: 0, y: 8, filter: 'blur(3px)', duration: 0.5, stagger: 0.04, delay: 0.3, clearProps: 'transform,filter,visibility'
+            autoAlpha: 0, y: 4, duration: 0.2, stagger: 0.02, clearProps: 'transform,visibility'
         });
     }
     lucide.createIcons();
@@ -1002,10 +1046,11 @@ async function regenerateReport() {
     if (!confirm('Re-run the AI over the current transcript? This replaces the summary, decisions and action items (including any edits to them).')) return;
     const btn = document.getElementById('btn-regenerate');
     btn.disabled = true;
+    btn.setAttribute('aria-busy', 'true');
     showToast('Regenerating with the local AI model. This can take a minute.');
     try { adoptReport(await api('POST', `/api/reports/${currentReport.id}/regenerate`)); showToast('Results regenerated'); }
     catch (error) { showToast(error.message, true); }
-    finally { btn.disabled = false; }
+    finally { btn.disabled = false; btn.removeAttribute('aria-busy'); }
 }
 
 async function deleteMeeting() {
@@ -1015,6 +1060,7 @@ async function deleteMeeting() {
     reportCache = reportCache.filter(r => r.id !== currentReport.id);
     currentReport = null;
     showToast('Meeting deleted');
+    renderDashboard();
     switchView('history');
 }
 
@@ -1035,9 +1081,19 @@ function exportReport(format) {
 
 function copyText(elementId) {
     const text = document.getElementById(elementId).innerText;
-    navigator.clipboard.writeText(text)
-        .then(() => showToast('Summary copied'))
-        .catch(() => showToast('Copy failed. Select the text and copy it manually.', true));
+    const fallback = () => {
+        // Embedded browsers (e.g. VS Code's) may refuse the async clipboard API; execCommand still works from a click.
+        const box = document.createElement('textarea');
+        box.value = text;
+        box.style.cssText = 'position:fixed;opacity:0';
+        document.body.appendChild(box);
+        box.select();
+        const ok = document.execCommand('copy');
+        box.remove();
+        showToast(ok ? 'Summary copied' : 'Copy failed. Select the text and copy it manually.', !ok);
+    };
+    if (!navigator.clipboard) return fallback();
+    navigator.clipboard.writeText(text).then(() => showToast('Summary copied'), fallback);
 }
 
 // Transcript search: every typed word must appear in the line.
@@ -1153,33 +1209,38 @@ function userRow(u, meId, executives) {
     if (!u.isActive) name.appendChild(el('span', 'pill pill-off', 'Disabled'));
     if (u.locked) name.appendChild(el('span', 'pill pill-warn', 'Locked'));
     if (u.id === meId) name.appendChild(el('span', 'pill pill-off', 'You'));
-    const team = u.roleId === 2 ? ` · team of ${u.teamSize}` : u.roleId === 3 ? ` · team: ${u.executive || 'none'}` : '';
-    main.append(name, el('p', 'user-meta num',
-        `${u.email || 'no email'}${team} · ${u.meetings} meeting${u.meetings === 1 ? '' : 's'} · last sign-in ${formatWhen(u.lastLogin)}`));
+    const team = u.roleId === 2 ? `Leads ${u.teamSize} ${u.teamSize === 1 ? 'person' : 'people'}`
+        : u.roleId === 3 ? (u.executive ? `In ${u.executive}'s team` : 'Not in a team') : '';
+    main.append(name, el('p', 'user-meta num', [
+        u.email || 'No email', team,
+        `${u.meetings} meeting${u.meetings === 1 ? '' : 's'}`,
+        u.lastLogin ? `Last sign-in ${formatWhen(u.lastLogin)}` : 'Never signed in'
+    ].filter(Boolean).join(' · ')));
 
     const actions = el('div', 'user-actions');
     const act = (label, handler, danger) => {
-        const b = el('button', `btn btn-quiet${danger ? ' btn-danger' : ''}`, label);
+        const b = el('button', `btn btn-quiet${danger ? ' btn-danger btn-danger-edge' : ''}`, label);
         b.type = 'button';
         b.setAttribute('aria-label', `${label} for ${u.username}`);
         b.onclick = handler;
         actions.appendChild(b);
     };
     if (u.roleId === 3) {
+        actions.appendChild(el('span', 'assign-label', 'Team'));
         const pick = el('select', 'field assign');
         pick.setAttribute('aria-label', `Team for ${u.username}`);
-        pick.append(new Option('No team', ''), ...executives.map(x => new Option(`Team of ${x.username}`, x.id)));
+        pick.append(new Option('No team', ''), ...executives.map(x => new Option(`${x.username}'s team`, x.id)));
         pick.value = u.executiveId || '';
         pick.onchange = () => adminAction(() => api('PATCH', `/api/admin/users/${u.id}`, { executiveId: pick.value ? Number(pick.value) : null }), 'Team updated');
         actions.appendChild(pick);
     }
-    act('Reset password', () => openPasswordDialog(u));
-    if (u.locked) act('Unlock', () => adminAction(() => api('PATCH', `/api/admin/users/${u.id}`, { unlock: true }), 'Account unlocked'));
+    act(u.id === meId ? 'Change my password' : 'Reset password', () => openPasswordDialog(u, u.id === meId));
+    if (u.locked) act('Unlock account', () => adminAction(() => api('PATCH', `/api/admin/users/${u.id}`, { unlock: true }), 'Account unlocked'));
     if (u.id !== meId && u.roleId !== 1) {
-        act(u.roleId === 2 ? 'Make Normal User' : 'Make Executive',
+        act(u.roleId === 2 ? 'Change to Normal User' : 'Promote to Executive',
             () => adminAction(() => api('PATCH', `/api/admin/users/${u.id}`, { roleId: u.roleId === 2 ? 3 : 2 }), 'Role updated'));
-        act(u.isActive ? 'Disable' : 'Enable', () => adminAction(() => api('PATCH', `/api/admin/users/${u.id}`, { isActive: !u.isActive }), u.isActive ? 'User disabled' : 'User enabled'));
-        act('Delete', () => {
+        act(u.isActive ? 'Disable account' : 'Enable account', () => adminAction(() => api('PATCH', `/api/admin/users/${u.id}`, { isActive: !u.isActive }), u.isActive ? 'User disabled' : 'User enabled'));
+        act('Delete account', () => {
             if (confirm(`Delete ${u.username} and all of their meetings? This cannot be undone.`)) {
                 adminAction(() => api('DELETE', `/api/admin/users/${u.id}`), 'User deleted');
             }
@@ -1197,7 +1258,7 @@ async function adminAction(fn, doneMessage) {
 function teamBlock(title, members) {
     const block = el('div', 'team-block');
     block.appendChild(el('h4', '', title));
-    block.appendChild(el('p', 'team-members', members.length ? members.map(m => m.username).join(', ') : 'No members yet.'));
+    block.appendChild(el('p', 'team-members', members.length ? members.map(m => m.username).join(', ') : 'No members yet'));
     return block;
 }
 
@@ -1216,7 +1277,7 @@ async function renderAdmin() {
     document.getElementById('adm-users').textContent = data.stats.users;
     document.getElementById('adm-executives').textContent = data.stats.executives;
     document.getElementById('adm-meetings').textContent = data.stats.meetings;
-    document.getElementById('adm-hours').textContent = data.stats.hours.toFixed(1) + 'h';
+    document.getElementById('adm-hours').textContent = formatTotalTime(data.stats.hours * 3600);
     document.getElementById('adm-utterances').textContent = data.stats.utterances;
     document.getElementById('adm-db-version').textContent = data.database.version;
     document.getElementById('adm-db-size').textContent = data.database.size;
@@ -1224,15 +1285,15 @@ async function renderAdmin() {
     const executives = data.users.filter(u => u.roleId === 2 && u.isActive);
     const teamPick = document.getElementById('new-team');
     const chosen = teamPick.value;
-    teamPick.replaceChildren(new Option('No team', ''), ...executives.map(x => new Option(`Team of ${x.username}`, x.id)));
+    teamPick.replaceChildren(new Option('No team', ''), ...executives.map(x => new Option(`${x.username}'s team`, x.id)));
     teamPick.value = chosen;
     syncNewTeam();
 
     const normals = data.users.filter(u => u.roleId === 3);
     const teams = document.getElementById('admin-teams');
     teams.replaceChildren(
-        ...executives.map(x => teamBlock(`Team of ${x.username}`, normals.filter(u => u.executiveId === x.id))),
-        teamBlock('Not on a team', normals.filter(u => !u.executiveId)));
+        ...executives.map(x => teamBlock(`${x.username}'s team`, normals.filter(u => u.executiveId === x.id))),
+        ...(normals.some(u => !u.executiveId) ? [teamBlock('Not on a team', normals.filter(u => !u.executiveId))] : []));
     if (!executives.length) teams.prepend(el('div', 'insight-empty', 'Create an Executive account to start a team, then assign Normal Users to it below.'));
 
     document.getElementById('admin-users').replaceChildren(...data.users.map(u => userRow(u, data.me, executives)));
@@ -1248,9 +1309,16 @@ async function renderAdmin() {
 
 const pwDialog = document.getElementById('pw-dialog');
 let pwUser = null;
-function openPasswordDialog(u) {
+let pwIsSelf = false;
+function openPasswordDialog(u, isSelf) {
     pwUser = u;
-    document.getElementById('pw-for').textContent = `Choose a new password for ${u.username}. Share it with them privately.`;
+    pwIsSelf = isSelf;
+    // Your own account reads "you"; someone else's tells the Admin to pass the password on.
+    document.getElementById('pw-title').textContent = isSelf ? 'Change your password' : `Reset password for ${u.username}`;
+    document.getElementById('pw-for').textContent = isSelf
+        ? 'Choose a new password for your account. Use it the next time you sign in.'
+        : `Choose a new password for ${u.username} and tell them privately. It works on their next sign-in.`;
+    document.getElementById('pw-submit').textContent = isSelf ? 'Change password' : 'Reset password';
     document.getElementById('pw-input').value = '';
     pwDialog.showModal();
     document.getElementById('pw-input').focus();
@@ -1259,7 +1327,7 @@ if (pwDialog) {
     document.getElementById('pw-cancel').onclick = () => pwDialog.close();
     document.getElementById('pw-form').addEventListener('submit', () => {
         const password = document.getElementById('pw-input').value;
-        adminAction(() => api('PATCH', `/api/admin/users/${pwUser.id}`, { password }), 'Password reset');
+        adminAction(() => api('PATCH', `/api/admin/users/${pwUser.id}`, { password }), pwIsSelf ? 'Your password was changed' : 'Password reset');
     });
 }
 
@@ -1294,11 +1362,104 @@ refreshReports();
 if (IS_ADMIN) switchView('admin'); // Admins land on account management, not on meetings
 window.addEventListener('load', () => {
     moveNavIndicator(document.querySelector('.nav-btn.is-active'), true);
-    if (!animate || IS_ADMIN) return;
-    gsap.timeline()
-        .from('.sidebar', { autoAlpha: 0, x: -16, duration: 0.8 })
-        .from('.nav-btn, .nav-group-label', { autoAlpha: 0, x: -8, duration: 0.5, stagger: 0.04, clearProps: 'transform,visibility' }, '<0.15')
-        .from('#nav-indicator', { scaleX: 0.6, autoAlpha: 0, duration: 0.6, transformOrigin: 'left center' }, '<0.15')
-        .from('#view-dashboard > *', { autoAlpha: 0, y: 16, duration: 0.7, stagger: 0.07, clearProps: 'transform,visibility' }, '<0.05')
-        .from('#view-dashboard .stat', { autoAlpha: 0, y: 8, duration: 0.5, stagger: 0.06, clearProps: 'transform,visibility' }, '<0.15');
+});
+
+// ---------------------------------------------------------------------------
+// Quick search (Ctrl/Cmd+K): jump to a page or a meeting
+// ---------------------------------------------------------------------------
+const paletteEl = document.getElementById('palette');
+let paletteItems = [];
+let paletteIndex = 0;
+
+function paletteSources() {
+    const pages = IS_ADMIN
+        ? [['Admin', 'admin'], ['Settings', 'settings']]
+        : [['Dashboard', 'dashboard'], ['New analysis', 'analyze'], [IS_EXEC ? 'History and team' : 'History', 'history'], ['Settings', 'settings']];
+    const items = pages.map(([label, view]) => ({ label, hint: 'Page', run: () => switchView(view) }));
+    if (!IS_ADMIN) {
+        loadReports().forEach(r => items.push({
+            label: r.title || r.fileName,
+            hint: r.mine === false ? r.owner : 'Meeting',
+            find: `${r.title} ${r.fileName} ${r.summary} ${(r.speakerNames || []).join(' ')}`.toLowerCase(),
+            run: () => openReport(r.id, true)
+        }));
+    }
+    return items;
+}
+
+function renderPalette() {
+    const query = document.getElementById('palette-input').value.toLowerCase().trim();
+    // Best match first: label starts with the query, then a word in the label does, then anything else.
+    const rank = i => {
+        const label = i.label.toLowerCase();
+        return label.startsWith(query) ? 0 : label.includes(` ${query}`) ? 1 : label.includes(query) ? 2 : 3;
+    };
+    paletteItems = paletteSources()
+        .filter(i => query.split(/\s+/).every(t => `${i.label} ${i.find || ''}`.toLowerCase().includes(t)))
+        .map((item, order) => ({ item, order, score: query ? rank(item) : 0 }))
+        .sort((a, b) => a.score - b.score || a.order - b.order)
+        .map(x => x.item)
+        .slice(0, 8);
+    paletteIndex = 0;
+    const list = document.getElementById('palette-list');
+    list.replaceChildren(...(paletteItems.length ? paletteItems.map((item, i) => {
+        const li = el('li', '', item.label);
+        li.setAttribute('role', 'option');
+        li.setAttribute('aria-selected', String(i === 0));
+        li.append(el('small', '', item.hint));
+        li.onclick = () => runPalette(item);
+        return li;
+    }) : [el('li', 'palette-empty', 'Nothing found')]));
+}
+
+function runPalette(item) {
+    paletteEl.close();
+    item.run();
+}
+
+function openPalette() {
+    document.getElementById('palette-input').value = '';
+    renderPalette();
+    paletteEl.showModal();
+    document.getElementById('palette-input').focus();
+}
+
+if (paletteEl) {
+    document.getElementById('palette-key').textContent = /Mac|iPhone|iPad/.test(navigator.platform) ? '\u2318K' : 'Ctrl K';
+    document.getElementById('palette-input').addEventListener('input', renderPalette);
+    paletteEl.addEventListener('click', e => { if (e.target === paletteEl) paletteEl.close(); });
+    paletteEl.addEventListener('keydown', e => {
+        if (!['ArrowDown', 'ArrowUp', 'Enter'].includes(e.key)) return;
+        e.preventDefault();
+        if (e.key === 'Enter') { if (paletteItems[paletteIndex]) runPalette(paletteItems[paletteIndex]); return; }
+        paletteIndex = (paletteIndex + (e.key === 'ArrowDown' ? 1 : -1) + paletteItems.length) % Math.max(1, paletteItems.length);
+        [...document.querySelectorAll('#palette-list li')].forEach((li, i) => li.setAttribute('aria-selected', String(i === paletteIndex)));
+    });
+    document.addEventListener('keydown', e => {
+        if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+            e.preventDefault();
+            if (paletteEl.open) paletteEl.close(); else openPalette();
+        }
+    });
+}
+
+// Turn the History filter dropdowns into segmented controls (the select stays as the source of truth).
+document.querySelectorAll('select.seg-source').forEach(select => {
+    const group = el('div', 'seg');
+    group.setAttribute('role', 'group');
+    group.setAttribute('aria-label', select.getAttribute('aria-label') || '');
+    const buttons = [...select.options].map(option => {
+        const button = el('button', '', option.text);
+        button.type = 'button';
+        button.onclick = () => {
+            select.value = option.value;
+            select.dispatchEvent(new Event('change'));
+            sync();
+        };
+        group.appendChild(button);
+        return [button, option];
+    });
+    const sync = () => buttons.forEach(([button, option]) => button.setAttribute('aria-pressed', String(option.value === select.value)));
+    select.after(group);
+    sync();
 });

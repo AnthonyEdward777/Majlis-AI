@@ -58,6 +58,23 @@ class AccountTests(unittest.TestCase):
         for path in re.findall(r"(?:src|href)=[\"'](/static/vendor/[^\"']+)", html):
             self.assertEqual(c.get(path).status_code, 200, path)
 
+    def test_login_page_script_is_valid_javascript_text(self):
+        # Jinja escapes quotes inside <script>; that once broke the sign-in loading state.
+        setup_admin()
+        html = app.app.test_client().get("/login").get_data(as_text=True)
+        script = html.split("<script>")[1].split("</script>")[0]
+        self.assertNotIn("&#", script)
+        self.assertNotIn("&quot;", script)
+
+    def test_report_list_carries_speaker_names_for_dashboard_and_search(self):
+        admin = setup_admin()
+        add_user(admin, "dana")
+        dana = sign_in("dana")
+        import accounts
+        accounts.save_meeting(user_id("dana"), "m.wav", {"speaker_transcript": LINES, "summary": "s"})
+        listed = dana.get("/api/reports").get_json()
+        self.assertEqual(listed[0]["speakerNames"], ["SPEAKER_00"])
+
     def test_first_run_setup_then_registration_closes(self):
         c = app.app.test_client()
         self.assertEqual(c.get("/login").headers["Location"], "/register")

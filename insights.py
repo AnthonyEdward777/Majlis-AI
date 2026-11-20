@@ -32,10 +32,11 @@ PROMPT = """Read this meeting transcript (Arabic, English or a mix):
 {transcript}
 
 Return JSON with:
-- summary: a short summary of the meeting. Write every field in the language the transcript is mostly in (an Arabic transcript gets an Arabic summary).
-- decisions: the decisions that were made, one short sentence each. Empty list if none.
-- action_items: tasks agreed in the meeting, each with a description, the responsible_person
+- summary: a short summary of the meeting, written in the language the transcript is mostly in (an Arabic transcript gets an Arabic summary).
+- decisions: things the group agreed or settled (for example postponing a launch, choosing an option, approving a plan), one short sentence each. Empty list only if nothing was agreed.
+- action_items: tasks someone took on, each with a description, the responsible_person
   (a name from the transcript, or empty if nobody was named) and the deadline (as spoken, or empty).
+Keep names, product words and any quoted sentence in the language the speaker used; do not translate them.
 Only include what the transcript says. Do not invent names, decisions or dates."""
 
 
